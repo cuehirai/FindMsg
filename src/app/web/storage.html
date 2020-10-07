@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Grant storage permission</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- {{VERSION_NUMBER}} -->
+  <!-- {{COMMIT_NUMBER}} -->
+</head>
+
+<body>
+  <script>
+    const u = new URL(window.location.href);
+
+    const h = document.createElement("h1");
+    h.innerText = u.searchParams.get("t") || "Please grant storage permission";;
+
+    const p = document.createElement("p");
+    p.innerText = u.searchParams.get("m") || "This app has not been granted permission to use persistent storage. This permission is needed to ensure that messages can be stored on this computer.";
+
+    const btn = document.createElement("button");
+    btn.innerText = u.searchParams.get("b") || "Click here to grant permission";
+    btn.addEventListener("click", function () {
+      navigator.storage.persist().then(console.log).catch(console.error);
+    });
+
+    document.body.append(h, p, btn);
+  </script>
+</body>
+
+</html>

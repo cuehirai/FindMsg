@@ -1,0 +1,82 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.6/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.6",
+  "id": "{{APPLICATION_ID}}",
+  "version": "{{VERSION}}",
+  "packageName": "{{PACKAGE_NAME}}",
+  "localizationInfo": {
+    "defaultLanguageTag": "en",
+    "additionalLanguages": [{
+      "languageTag": "ja",
+      "file": "ja.json"
+    }]
+  },
+  "developer": {
+    "name": "Kacoms",
+    "websiteUrl": "https://{{HOSTNAME}}",
+    "privacyUrl": "https://{{HOSTNAME}}/privacy.html",
+    "termsOfUseUrl": "https://{{HOSTNAME}}/tou.html"
+  },
+  "name": {
+    "short": "KSearch",
+    "full": "Kacoms Custom Search"
+  },
+  "description": {
+    "short": "Provides search for channel and chat messages and a channel topics tab.",
+    "full": "This app allows offline full text search through channel and chat messages and also provides a topics tab that displays messages containing a subject line. The topics tab can be attached to a channel or used standalone."
+  },
+  "icons": {
+    "outline": "icon-outline.png",
+    "color": "icon-color.png"
+  },
+  "accentColor": "#D85028",
+  "configurableTabs": [
+    {
+      "configurationUrl": "https://{{HOSTNAME}}/FindMsgTopicsTab/config.html?theme={theme}&hint={loginHint}&eid={entityId}&sid={subEntityId}&uid={userObjectId}&l={locale}&gid={groupId}&tid={tid}",
+      "canUpdateConfiguration": true,
+      "scopes": [
+        "team"
+      ]
+    }
+  ],
+  "staticTabs": [
+    {
+      "entityId": "channelMessageSearch",
+      "name": "Channel Search",
+      "contentUrl": "https://{{HOSTNAME}}/FindMsgSearchTab/?theme={theme}&hint={loginHint}&eid={entityId}&sid={subEntityId}&uid={userObjectId}&l={locale}",
+      "websiteUrl": "https://{{HOSTNAME}}/FindMsgSearchTab/?theme={theme}&hint={loginHint}&eid={entityId}&sid={subEntityId}&uid={userObjectId}&l={locale}",
+      "scopes": [
+        "personal"
+      ]
+    },
+    {
+      "entityId": "chatMessageSearch",
+      "name": "Chat Search",
+      "contentUrl": "https://{{HOSTNAME}}/FindMsgSearchChat/?theme={theme}&hint={loginHint}&eid={entityId}&sid={subEntityId}&uid={userObjectId}&l={locale}",
+      "websiteUrl": "https://{{HOSTNAME}}/FindMsgSearchChat/?theme={theme}&hint={loginHint}&eid={entityId}&sid={subEntityId}&uid={userObjectId}&l={locale}",
+      "scopes": [
+        "personal"
+      ]
+    },
+    {
+      "entityId": "topicsDisplay",
+      "name": "Channel Topics",
+      "contentUrl": "https://{{HOSTNAME}}/FindMsgTopicsTab/?theme={theme}&hint={loginHint}&eid={entityId}&uid={userObjectId}&tid={tid}&l={locale}",
+      "websiteUrl": "https://{{HOSTNAME}}/FindMsgTopicsTab/?theme={theme}&hint={loginHint}&eid={entityId}&uid={userObjectId}&tid={tid}&l={locale}",
+      "scopes": [
+        "personal"
+      ]
+    }
+  ],
+  "bots": [],
+  "connectors": [],
+  "composeExtensions": [],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "validDomains": [
+    "{{HOSTNAME}}"
+  ],
+  "showLoadingIndicator": false
+}

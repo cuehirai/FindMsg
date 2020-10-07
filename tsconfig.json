@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "es6",
+        "lib": ["DOM", "ES2017", "ES2019.Array"],
+        "moduleResolution": "node",
+        "noImplicitAny": false,
+        "strictNullChecks": true,
+        "jsx": "react",
+        "sourceMap": true,
+        "experimentalDecorators": true,
+        "resolveJsonModule": true,
+        "esModuleInterop": true,
+    },
+    "include": [ "src/app/scripts/**/*.ts", "src/app/scripts/**/*.tsx" ],
+    "exclude": [
+        "node_modules"
+    ]
+}
