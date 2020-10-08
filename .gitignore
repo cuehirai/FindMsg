@@ -13,3 +13,8 @@ connectors.json
 # do not include dist files
 dist
 temp/manifest.json
+.publish/color.png
+.publish/Development.env
+.publish/Development.zip
+.publish/manifest.json
+.publish/outline.png

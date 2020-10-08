@@ -18,8 +18,8 @@
     "termsOfUseUrl": "https://{{HOSTNAME}}/tou.html"
   },
   "name": {
-    "short": "KSearch",
-    "full": "Kacoms Custom Search"
+    "short": "Message Finder",
+    "full": "Message Finder for Microsoft Teams TOPICS and CHATS"
   },
   "description": {
     "short": "Provides search for channel and chat messages and a channel topics tab.",
