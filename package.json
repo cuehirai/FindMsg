@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node dist/server.js",
     "build": "gulp build",
-    "debug": "gulp serve --debug"
+    "debug": "gulp serve --debug",
+    "manifest": "gulp manifest"
   },
   "dependencies": {
     "@azure/msal-browser": "~2.1.0",

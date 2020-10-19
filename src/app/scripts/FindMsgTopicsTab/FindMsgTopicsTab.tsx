@@ -240,6 +240,9 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
                 });
                 return filtered;
             }, []));
+            channelOptions.forEach(element => {
+                element.unshift(allChannelsOption)
+            });
 
             // add the "All Channels" options as the only element of "All Teams"
             channelOptions.unshift([allChannelsOption]);
@@ -539,15 +542,28 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
 
     private getMessages = async (order: MessageOrder = MessageOrder.touched, dir: Direction = Direction.descending): Promise<void> => {
         const {
-            teamsInfo: { channelId },
+            teamsInfo: { channelId, channelOptions },
             filterInput,
         } = this.state;
 
         this.setState({ loading: true });
 
         try {
+            const { teamIdx, channelIdx } = this.state;
+            const channelIds = new Set<string>();
+            log.info(`teamIdx= ${teamIdx}`);
+            log.info(`channelIdx= ${channelIdx}`);
+            if (teamIdx > 0) {
+                if (channelIdx == 0) {
+                    channelOptions[teamIdx].forEach(c => {
+                        log.info(`key= ${c.key} name= ${c.header}`);
+                        channelIds.add(c.key);
+                    });
+                }
+            }
+
             assert1(channelId, nameof(channelId));
-            const [messages, hasMore] = await FindMsgChannelMessage.getTopLevelMessagesWithSubject(channelId, order, dir, 0, initialDisplayCount, filterInput);
+            const [messages, hasMore] = await FindMsgChannelMessage.getTopLevelMessagesWithSubject(channelId, channelIds, order, dir, 0, initialDisplayCount, filterInput);
             this.setState({
                 filterString: filterInput,
                 searchResult: { hasMore, messages, dir, order }
@@ -564,15 +580,27 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
     private loadMoreMessages = async () => {
         const {
             searchResult: { messages, order, dir },
-            teamsInfo: { channelId },
+            teamsInfo: { channelId, channelOptions },
             filterInput,
         } = this.state;
 
         try {
+            const { teamIdx, channelIdx } = this.state;
+            const channelIds = new Set<string>();
+            log.info(`teamIdx= ${teamIdx}`);
+            log.info(`channelIdx= ${channelIdx}`);
+            if (teamIdx > 0) {
+                if (channelIdx == 0) {
+                    channelOptions[teamIdx].forEach(c => {
+                        log.info(`key= ${c.key} name= ${c.header}`);
+                        channelIds.add(c.key);
+                    });
+                }
+            }
             assert1(channelId);
             this.setState({ loading: true });
 
-            const [newMessages, hasMore] = await FindMsgChannelMessage.getTopLevelMessagesWithSubject(channelId, order, dir, messages.length, loadMoreCount, filterInput);
+            const [newMessages, hasMore] = await FindMsgChannelMessage.getTopLevelMessagesWithSubject(channelId, channelIds, order, dir, messages.length, loadMoreCount, filterInput);
 
             this.setState({
                 searchResult: {
