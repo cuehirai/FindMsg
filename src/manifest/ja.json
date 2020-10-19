@@ -1,6 +1,6 @@
 {
     "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.6/MicrosoftTeams.schema.json",
-    "name.short": "K検索",
+    "name.short": "メッセージ検索",
     "name.full": "カコムス カスタム 検索",
     "description.short": "チャネルメッセージ、チャットメッセージの検索およびチャネル表題一覧タブを提供しています。",
     "description.full": "チャネルメッセージ、チャットメッセージの検索およびチャネル表題一覧タブを提供しています。",

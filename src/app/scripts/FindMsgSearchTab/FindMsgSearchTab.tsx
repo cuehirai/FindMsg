@@ -9,7 +9,7 @@ import { Alert, AlertProps, Button, DatePicker, Dialog, Divider, Dropdown, Dropd
 import { Client, AuthProviderCallback } from "@microsoft/microsoft-graph-client";
 import { cancellation, nop, progressFn, OperationCancelled, cancelFn, cancellationNoThrow, assertT, storage } from "../utils";
 import { Sync, FindMsgChannel, FindMsgTeam, IFindMsgChannelMessage, IFindMsgChannel, IFindMsgTeam, FindMsgChannelMessage, FindMsgUserCache } from "../db";
-import { TeamSelect } from "./TeamChannelSelect";
+// import { TeamSelect } from "./TeamChannelSelect";
 import { SearchResultView } from "./SearchResult";
 import * as du from "../dateUtils";
 import { SyncState, SyncControl, SyncWidget } from "../SyncWidget";
@@ -19,11 +19,13 @@ import { Page } from '../ui';
 import { StoragePermissionWidget } from "../StoragePermissionWidget";
 import { StoragePermissionIndicator } from "../StoragePermissionIndicator";
 import { AI } from '../appInsights';
+import { getTopLevelMessagesLastSynced } from "../db/Sync";
 
 
 export declare type MyTeam = IFindMsgTeam & { channels: IFindMsgChannel[] };
 
 declare type SearchUserItem = DropdownItemProps & { key: string };
+declare type DropdownItemPropsKey = DropdownItemProps & { key: string };
 
 interface ITeamCache { teams: MyTeam[] }
 
@@ -44,15 +46,22 @@ interface ISearchInfo {
 
 
 interface ITeamsInfo {
+    locale: string | null;
+    groupId: string;
+    channelId: string;
     entityId: string | null;
     subEntityId: string | null;
     loginHint: string;
+    teamName: string;
+    channelName: string;
+    teamOptions: DropdownItemPropsKey[];
+    channelOptions: DropdownItemPropsKey[][];
 }
 
 
 export interface IFindMsgSearchTabState extends ITeamsBaseComponentState, ITeamCache, ISearchInfo, SyncState, SyncControl {
-    checkState: Map<string, boolean>;
-    checkAll: boolean;
+    // checkState: Map<string, boolean>;
+    // checkAll: boolean;
     searchUserOptions: ShorthandCollection<DropdownItemProps>;
 
     loading: boolean;
@@ -62,6 +71,10 @@ export interface IFindMsgSearchTabState extends ITeamsBaseComponentState, ITeamC
 
     // function to cancel running sync (cooperative)
     cancel: (() => void) | null;
+
+    dropdownDisabled: boolean;
+    teamIdx: number;
+    channelIdx: number;
 
     authInProgress: AuthProviderCallback;
     authResult: AuthError | null;
@@ -111,6 +124,10 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
     constructor(props: never) {
         super(props);
 
+        const cid = this.getQueryVariable("cid");
+        const gid = this.getQueryVariable("gid");
+        const l = this.getQueryVariable("l");
+
         this.state = {
             teams: [],
 
@@ -119,8 +136,8 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
 
             loading: true,
             cancel: null,
-            checkState: new Map<string, boolean>(),
-            checkAll: true,
+            // checkState: new Map<string, boolean>(),
+            // checkAll: true,
             searchUserOptions: [],
 
             searchResults: [],
@@ -145,10 +162,21 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
             // so do the expedient thing is to use the last time sync was executed in this tab.
             lastSynced: loadLastSynced(),
 
+            dropdownDisabled: !!(cid && gid),
+            teamIdx: 0,
+            channelIdx: 0,
+
             teamsInfo: {
+                channelId: cid ?? "",
+                groupId: gid ?? "",
+                locale: l ?? null,
                 entityId: this.getQueryVariable("eid") ?? "",
                 subEntityId: this.getQueryVariable("sid") ?? "",
                 loginHint: this.getQueryVariable("hint") ?? "",
+                channelName: "",
+                teamName: "",
+                channelOptions: [[]],
+                teamOptions: [],
             },
 
             askForStoragePermission: false,
@@ -181,7 +209,8 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
 
             t = strings.get(context.locale);
 
-            this.setState({
+            this.initInfo(context);
+/*             this.setState({
                 t,
                 loginRequired: !haveUserInfo(context.loginHint),
                 teamsInfo: {
@@ -190,8 +219,9 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                     loginHint: context.loginHint ?? "",
                 }
             });
-        } else {
-            this.setState({
+ */        } else {
+            this.initInfo();
+    /*             this.setState({
                 loginRequired: !haveUserInfo(this.state.teamsInfo.loginHint),
                 teamsInfo: {
                     entityId: "",
@@ -199,13 +229,164 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                     loginHint: this.state.teamsInfo.loginHint,
                 }
             });
-        }
+ */        }
 
         document.title = t.search.pageTitle;
 
         this.setState({
             askForStoragePermission: !storage.granted() && storage.askForPermission,
             loading: false
+        });
+    }
+
+    private initInfo = async (context?: microsoftTeams.Context): Promise<void> => {
+        const loginHint = context?.loginHint ?? this.state.teamsInfo.loginHint;
+        let groupId = context?.groupId ?? this.state.teamsInfo.groupId;
+        let channelId = context?.channelId ?? this.state.teamsInfo.channelId;
+        const entityId = context?.entityId ?? "";
+        const subEntityId= context?.subEntityId ?? null;
+        const locale = context?.locale ?? this.state.teamsInfo.locale;
+        const teamName = context?.teamName ?? "";
+        const channelName = context?.channelName ?? "";
+        const t = strings.get(locale);
+
+        document.title = t.topics.pageTitle;
+
+        microsoftTeams.setFrameContext({
+            contentUrl: location.href,
+            websiteUrl: location.href,
+        });
+
+        // add lastSynced for top level messages
+        const lastSynced = channelId ? await Sync.getChannelLastSynced(channelId) : getTopLevelMessagesLastSynced();
+
+        let teamIdx: number;
+        let channelIdx: number;
+        let teamOptions: DropdownItemPropsKey[];
+        let channelOptions: DropdownItemPropsKey[][];
+
+        if (this.state.dropdownDisabled) {
+            // We are in a channel. teamId, channelId, teamName, channelName are provided by teams and can not be changed.
+            teamIdx = 0;
+            channelIdx = 0;
+
+            teamOptions = [{
+                header: teamName || (await FindMsgTeam.get(groupId))?.displayName || "(unknown)",
+                key: groupId,
+                selected: true,
+            }];
+
+            channelOptions = [[{
+                header: channelName || (await FindMsgChannel.get(channelId))?.displayName || "(unknown)",
+                key: channelId,
+                selected: true,
+            }]];
+
+        } else {
+            // We are standalone. Get all the data from the local store.
+            const allChannels = await FindMsgChannel.getAll();
+            const teams = (await FindMsgTeam.getAll()).map(t => ({ ...t, channels: allChannels.filter(c => c.teamId === t.id) }));
+
+            const allTeamsOption: DropdownItemPropsKey = {
+                header: t.topics.allTeams,
+                key: "",
+                selected: false,
+            };
+
+            const allChannelsOption: DropdownItemPropsKey = {
+                header: t.topics.allChannels,
+                key: "",
+                selected: false,
+            };
+
+            teamOptions = teams.map(t => ({
+                header: t.displayName,
+                key: t.id,
+                selected: false,
+            }));
+
+            // find the currently selected index including the the "All Teams" entry we add below
+            teamIdx = 1 + teamOptions.findIndex(t => t.key === groupId, 0);
+            teamOptions.unshift(allTeamsOption);
+            teamOptions[teamIdx].selected = true;
+
+            // group channels by team and construct dropdown options
+            channelOptions = teams.map(t => allChannels.reduce<DropdownItemPropsKey[]>((filtered, { displayName, id, teamId }) => {
+                if (teamId === t.id) filtered.push({
+                    header: displayName,
+                    key: id,
+                    selected: id === channelId,
+                });
+                return filtered;
+            }, []));
+            channelOptions.forEach(element => {
+                element.unshift(allChannelsOption)
+            });
+
+            // add the "All Channels" options as the only element of "All Teams"
+            channelOptions.unshift([allChannelsOption]);
+
+            channelIdx = Math.max(0, channelOptions[teamIdx].findIndex(c => c.key === channelId));
+            channelOptions[teamIdx][channelIdx].selected = true;
+
+            groupId = teamOptions[teamIdx].key;
+            channelId = channelOptions[teamIdx][channelIdx].key;
+        }
+
+        this.setState({
+            teamsInfo: {
+                groupId, channelId,
+                teamOptions, channelOptions,
+                teamName, channelName,
+                loginHint, locale,
+                entityId, subEntityId,
+            },
+            teamIdx, channelIdx,
+            lastSynced,
+            loginRequired: !haveUserInfo(loginHint),
+            t,
+        });
+    }
+
+    private onTeamChanged = (_: unknown, data: DropdownProps): void => {
+        const selected = data.value as DropdownItemPropsKey;
+        const { teamsInfo } = this.state;
+        const { teamOptions, channelOptions } = teamsInfo;
+
+        const newIdx = teamOptions.findIndex(t => t.key === selected.key);
+        const newOpts = teamOptions.map((to, i) => ({ ...to, selected: i === newIdx }));
+
+        const newChannelIdx = Math.max(0, channelOptions[newIdx].findIndex(co => co.selected));
+        channelOptions[newIdx][newChannelIdx].selected = true;
+
+        this.setState({
+            teamIdx: newIdx,
+            // if no channel is selected, select the 2nd entry (first channel entry), but fall back to the 1st entry ("All Channels")
+            channelIdx: newChannelIdx,
+            teamsInfo: {
+                ...teamsInfo,
+                teamOptions: newOpts,
+                channelId: channelOptions[newIdx][newChannelIdx].key,
+                groupId: teamOptions[newIdx].key,
+            }
+        });
+    }
+
+
+    private onChannelChanged = (_: unknown, data: DropdownProps): void => {
+        const selected = data.value as DropdownItemPropsKey;
+        const { teamIdx, channelIdx, teamsInfo } = this.state;
+        const { channelOptions } = teamsInfo;
+
+        const newIdx = channelOptions[teamIdx].findIndex(t => t.key === selected.key);
+        channelOptions[teamIdx] = channelOptions[teamIdx].map((co, i) => (i === channelIdx || i === newIdx) ? { ...co, selected: i === newIdx } : co);
+
+        this.setState({
+            channelIdx: newIdx,
+            teamsInfo: {
+                ...teamsInfo,
+                channelId: channelOptions[teamIdx][newIdx].key,
+            }
         });
     }
 
@@ -226,19 +407,25 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                     search,
                     searching: searchingMsg,
                     cancel,
-                    allTeams,
+                    // allTeams,
                     from, to,
                     messagesFound,
                     searchUsersLabel,
                     searchUsersPlaceholder,
                 },
             },
+            teamIdx,
+            channelIdx,
+            dropdownDisabled,
+            teamsInfo: {
+                teamOptions, channelOptions
+            },
             askForStoragePermission,
             theme,
             teams,
             loading,
-            checkState,
-            checkAll,
+            // checkState,
+            // checkAll,
             searching,
             searchTerm,
             searchTime,
@@ -317,8 +504,14 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                     </Segment>
 
                     <Segment>
-                        <TeamSelect allText={allTeams} all={checkAll} teams={teams} checkState={checkState} changed={this.channelCheckChanged} />
-                    </Segment>
+                        {/* <TeamSelect allText={allTeams} all={checkAll} teams={teams} checkState={checkState} changed={this.channelCheckChanged} /> */}
+                        <Flex.Item shrink={2}>
+                                <Flex gap="gap.small" wrap>
+                                    <Dropdown disabled={dropdownDisabled} items={teamOptions} value={teamOptions[teamIdx]} onChange={this.onTeamChanged} />
+                                    <Dropdown disabled={dropdownDisabled} items={channelOptions[teamIdx]} value={channelOptions[teamIdx][channelIdx]} onChange={this.onChannelChanged} />
+                                </Flex>
+                            </Flex.Item>
+                   </Segment>
 
                     <Segment>
                         <Flex column gap="gap.small">
@@ -560,14 +753,15 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                 channels: dbChannels.filter(c => c.teamId === t.id),
             }));
 
-            const cs = new Map(this.state.checkState);
-            dbChannels.forEach(c => cs.set(c.id, cs.get(c.id) ?? false));
+            // const cs = new Map(this.state.checkState);
+            // dbChannels.forEach(c => cs.set(c.id, cs.get(c.id) ?? false));
 
             const { unknownUserDisplayName } = this.state.t;
             const users = await userCache.getKnownUsers();
             const searchUserOptions = users.map(({ id, displayName }) => ({ key: id, header: displayName || unknownUserDisplayName }));
 
-            this.setState({ teams, checkState: cs, searchUserOptions });
+            // this.setState({ teams, checkState: cs, searchUserOptions });
+            this.setState({ teams, searchUserOptions });
         }
         catch (error) {
             AI.trackException({ exception: error });
@@ -611,38 +805,38 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
 
 
 
-    /**
-     * Handle target team/channel checkbox change
-     * @param id Id of the team or channel to be selected or deselected (undefined toggles the "search all" checkbox)
-     */
-    private channelCheckChanged = (id?: string) => {
-        const { teams, checkState, checkAll } = this.state;
+    // /**
+    //  * Handle target team/channel checkbox change
+    //  * @param id Id of the team or channel to be selected or deselected (undefined toggles the "search all" checkbox)
+    //  */
+    // private channelCheckChanged = (id?: string) => {
+    //     const { teams, checkState, checkAll } = this.state;
 
-        if (!id) {
-            this.setState({ checkAll: !checkAll });
-            return;
-        }
+    //     if (!id) {
+    //         this.setState({ checkAll: !checkAll });
+    //         return;
+    //     }
 
-        const newCheckState = new Map(checkState);
-        let found = false;
+    //     const newCheckState = new Map(checkState);
+    //     let found = false;
 
-        teams.forEach(t => {
-            if (t.id === id) {
-                found = true;
-                const newState = !t.channels?.every(c => checkState.get(c.id) ?? false);
-                t.channels?.forEach(c => newCheckState.set(c.id, newState));
-            } else {
-                t.channels?.filter(c => c.id === id).forEach(c => {
-                    newCheckState.set(c.id, !newCheckState.get(c.id));
-                    found = true;
-                });
-            }
-        });
+    //     teams.forEach(t => {
+    //         if (t.id === id) {
+    //             found = true;
+    //             const newState = !t.channels?.every(c => checkState.get(c.id) ?? false);
+    //             t.channels?.forEach(c => newCheckState.set(c.id, newState));
+    //         } else {
+    //             t.channels?.filter(c => c.id === id).forEach(c => {
+    //                 newCheckState.set(c.id, !newCheckState.get(c.id));
+    //                 found = true;
+    //             });
+    //         }
+    //     });
 
-        if (!found) log.error(`id ${id} not found`);
+    //     if (!found) log.error(`id ${id} not found`);
 
-        this.setState({ checkState: newCheckState });
-    }
+    //     this.setState({ checkState: newCheckState });
+    // }
 
 
     /**
@@ -650,10 +844,26 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
      */
     private search = async () => {
         try {
-            const { searchTerm, checkState, checkAll, searchTimeFrom, searchTimeTo, searchUsers } = this.state;
+            // const { searchTerm, checkState, checkAll, searchTimeFrom, searchTimeTo, searchUsers } = this.state;
+            const { searchTerm, teamIdx, channelIdx, searchTimeFrom, searchTimeTo, searchUsers } = this.state;
             const [cancel, checkCancel] = cancellationNoThrow();
             const userIds = new Set<string>(searchUsers.map((u) => u.key));
-            const channels = new Set(checkAll ? null : Array.from(checkState.entries()).filter(([, v]) => v).map(([k]) => k));
+            // const channels = new Set(checkAll ? null : Array.from(checkState.entries()).filter(([, v]) => v).map(([k]) => k));
+            const { teamsInfo } = this.state;
+            const { channelOptions } = teamsInfo;
+            const channels = new Set<string>();
+            log.info(`teamIdx= ${teamIdx}`);
+            log.info(`channelIdx= ${channelIdx}`);
+            if (teamIdx > 0) {
+                if (channelIdx == 0) {
+                    channelOptions[teamIdx].forEach(c => {
+                        log.info(`key= ${c.key} name= ${c.header}`);
+                        channels.add(c.key);
+                    });
+                } else {
+                    channels.add(this.state.teamsInfo.channelId);
+                }
+            }
 
             this.setState({ searching: true, searchCancel: cancel });
             const messages = await FindMsgChannelMessage.search(searchTerm, searchTimeFrom, searchTimeTo, channels, userIds, checkCancel);

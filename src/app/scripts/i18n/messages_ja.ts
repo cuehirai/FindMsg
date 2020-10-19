@@ -5,7 +5,7 @@ import * as du from "../dateUtils";
 const dateFormat = "yyyy/MM/dd";
 const dateTimeFormat = "yyyy/MM/dd HH:mm";
 
-const appName = "K検索";
+const appName = "メッセージ検索";
 
 export const messages: IFindMsgTranslation = {
     dateFormat,
@@ -32,7 +32,7 @@ export const messages: IFindMsgTranslation = {
         pageTitle: `${appName} - 表題一覧`,
         team: "チーム",
         channel: "チャンネル",
-        loadMore: "もっと表示",
+        loadMore: "続きを表示",
         allTeams: "（全チーム）",
         allChannels: "（全チャネル）",
     },
@@ -59,11 +59,11 @@ export const messages: IFindMsgTranslation = {
         search: "検索",
         searching: "検索中",
         cancel: "中止",
-        searchTimeAll: "いつでも",
+        searchTimeAll: "期間を限定しない",
         searchTimePastWeek: "1週間以内",
         searchTimePastMonth: "1ヶ月以内",
         searchTimePastYear: "1年以内",
-        searchTimeCustom: "幅指定",
+        searchTimeCustom: "指定の期間内",
         searchUsersLabel: "このユーザのメッセージのみ",
         searchUsersPlaceholder: "(すべて)",
     },
@@ -78,11 +78,11 @@ export const messages: IFindMsgTranslation = {
         search: "検索",
         searching: "検索中",
         cancel: "中止",
-        searchTimeAll: "いつでも",
+        searchTimeAll: "期間を限定しない",
         searchTimePastWeek: "1週間以内",
         searchTimePastMonth: "1ヶ月以内",
         searchTimePastYear: "1年以内",
-        searchTimeCustom: "幅指定",
+        searchTimeCustom: "指定の期間内",
         searchUsersLabel: "このユーザのメッセージのみ",
         searchUsersPlaceholder: "(すべて)",
     },
@@ -99,7 +99,7 @@ export const messages: IFindMsgTranslation = {
         teamList: "チーム一覧を同期",
         channelList: t => `[${t}]のチャンネル一覧を同期`,
         topLevelMessages: (c, n) => `[${c}]の投稿を同期... ${n}`,
-        replies: (c, n) => `[${c}]の返事を同期... ${n}`,
+        replies: (c, n) => `[${c}]の返信を同期... ${n}`,
         syncProblem: "同期中に問題が発生しました。一部のメッセージを取得できなかった可能性があります。数分待ってから再び同期してください。",
         chatList: "チャット一覧を同期",
         chatMessages: (c, n) => `[${c}]の投稿を同期... ${n}`,

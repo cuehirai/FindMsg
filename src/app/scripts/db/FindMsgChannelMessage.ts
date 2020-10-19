@@ -373,7 +373,7 @@ export class FindMsgChannelMessage {
      * @param limit
      */
     @traceAsync()
-    static async getTopLevelMessagesWithSubject(channelId: string, order: MessageOrder, dir: Direction, offset = 0, limit = 0, filter = ""): Promise<[IFindMsgChannelMessage[], boolean]> {
+    static async getTopLevelMessagesWithSubject(channelId: string, channelIds: Set<string>, order: MessageOrder, dir: Direction, offset = 0, limit = 0, filter = ""): Promise<[IFindMsgChannelMessage[], boolean]> {
         const index = order2IdxMap[order];
 
         const collection = db.channelMessages.where(index).between([channelId || Dexie.minKey, Dexie.minKey, Dexie.minKey], [channelId || Dexie.maxKey, Dexie.maxKey, Dexie.maxKey], true, true);
@@ -382,6 +382,10 @@ export class FindMsgChannelMessage {
         if (offset > 0) collection.offset(offset);
         if (limit > 0) collection.limit(limit + 1);
         if (filter.trim()) collection.filter(FindMsgChannelMessage.createFilter(filter));
+
+        if (channelIds.size > 0){
+            collection.filter(m => channelIds.has(m.channelId));
+        }
 
         const result = await collection.toArray();
 
