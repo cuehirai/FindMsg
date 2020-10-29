@@ -15,7 +15,24 @@ import { IFindMsgChatDb } from './IFindMsgChatDb';
 import { IFindMsgChatMemberDb } from './IFindMsgChatMemberDb';
 import { IFindMsgChatMessageDb } from './IFindMsgChatMessageDb';
 import { IFindMsgImageDb } from './IFindMsgImageDb';
+import { IFindMsgEventDb } from './Event/IFindMsgEventDb';
+import { IFindMsgAttendeeDb } from './Attendee/IFindMsgAttendeeDb';
 
+/**
+ * エンティティ(テーブル)名リソース用インターフェース
+ * ※テーブルを追加時に随時登録
+ */
+export interface IEntityNames {
+    teams: string;
+    channels: string;
+    messages: string;
+    users: string;
+    chats: string;
+    chatMembers: string;
+    images: string;
+    events: string;
+    attendees: string;
+}
 
 /**
  * Generate a compound index definition
@@ -90,6 +107,18 @@ const indexes = Object.freeze({
     images: Object.freeze({
         $id: nameof<IFindMsgImageDb>(i => i.id),
     }),
+
+    events: Object.freeze({
+        $id: nameof<IFindMsgEventDb>(e => e.id),
+
+        organizer$start$subject: compound(nameof<IFindMsgEventDb>(m => m.organizerName), nameof<IFindMsgEventDb>(m => m.start), nameof<IFindMsgEventDb>(m => m.subject)),
+        start$subject: compound(nameof<IFindMsgEventDb>(m => m.start), nameof<IFindMsgEventDb>(m => m.subject)),
+        subject: nameof<IFindMsgEventDb>(m => m.subject),
+    }),
+
+    attendees: Object.freeze({
+        $eventId$id: compound(nameof<IFindMsgAttendeeDb>(a => a.eventId), nameof<IFindMsgAttendeeDb>(a => a.id)),
+    })
 });
 
 
@@ -105,6 +134,9 @@ class Database extends Dexie {
     chats: Dexie.Table<IFindMsgChatDb, string>;
     chatMembers: Dexie.Table<IFindMsgChatMemberDb, string>;
     chatMessages: Dexie.Table<IFindMsgChatMessageDb, string>;
+
+    events: Dexie.Table<IFindMsgEventDb, string>;
+    attendees: Dexie.Table<IFindMsgAttendeeDb, string>;
 
     /** Stores images attached to messages */
     images: Dexie.Table<IFindMsgImageDb, string>;
@@ -171,6 +203,11 @@ class Database extends Dexie {
             images: indexSpec(indexes.images),
         });
 
+        this.version(8).stores({
+            events: indexSpec(indexes.events),
+            attendees: indexSpec(indexes.attendees),
+        });
+
         this.teams = this.table('teams');
         this.channels = this.table('channels');
         this.channelMessages = this.table('messages');
@@ -179,6 +216,8 @@ class Database extends Dexie {
         this.chatMembers = this.table('chatMembers');
         this.chatMessages = this.table('chatMessages');
         this.images = this.table('images');
+        this.events = this.table('events');
+        this.attendees = this.table('attendees');
     }
 
     private static _onUpgrade(version: number) {

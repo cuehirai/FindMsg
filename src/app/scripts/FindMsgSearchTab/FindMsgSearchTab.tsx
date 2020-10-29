@@ -14,12 +14,13 @@ import { SearchResultView } from "./SearchResult";
 import * as du from "../dateUtils";
 import { SyncState, SyncControl, SyncWidget } from "../SyncWidget";
 import * as strings from '../i18n/messages';
-import { IFindMsgTranslation } from "../i18n/IFindMsgTranslation";
+import { IMessageTranslation } from "../i18n/IMessageTranslation";
 import { Page } from '../ui';
 import { StoragePermissionWidget } from "../StoragePermissionWidget";
 import { StoragePermissionIndicator } from "../StoragePermissionIndicator";
 import { AI } from '../appInsights';
 import { getTopLevelMessagesLastSynced } from "../db/Sync";
+import { ICommonMessage } from "../i18n/ICommonMessage";
 
 
 export declare type MyTeam = IFindMsgTeam & { channels: IFindMsgChannel[] };
@@ -83,26 +84,26 @@ export interface IFindMsgSearchTabState extends ITeamsBaseComponentState, ITeamC
     askForStoragePermission: boolean;
 
     teamsInfo: ITeamsInfo;
-    t: IFindMsgTranslation;
+    t: IMessageTranslation;
 }
 
 
 export interface ISearchTabTranslation {
     pageTitle: string;
     header: string;
-    search: string;
-    searching: string;
-    allTeams: string;
-    from: string;
-    to: string;
-    messagesFound: (shown: number, total: number) => string;
-    cancel: string;
+    // search: string;
+    // searching: string;
+    // allTeams: string;
+    // from: string;
+    // to: string;
+    // messagesFound: (shown: number, total: number) => string;
+    // cancel: string;
 
-    searchTimeAll: string;
-    searchTimePastWeek: string;
-    searchTimePastMonth: string;
-    searchTimePastYear: string;
-    searchTimeCustom: string;
+    // searchTimeAll: string;
+    // searchTimePastWeek: string;
+    // searchTimePastMonth: string;
+    // searchTimePastYear: string;
+    // searchTimeCustom: string;
 
     searchUsersLabel: string;
     searchUsersPlaceholder: string;
@@ -288,13 +289,13 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
             const teams = (await FindMsgTeam.getAll()).map(t => ({ ...t, channels: allChannels.filter(c => c.teamId === t.id) }));
 
             const allTeamsOption: DropdownItemPropsKey = {
-                header: t.topics.allTeams,
+                header: t.common.allTeams,
                 key: "",
                 selected: false,
             };
 
             const allChannelsOption: DropdownItemPropsKey = {
-                header: t.topics.allChannels,
+                header: t.common.allChannels,
                 key: "",
                 selected: false,
             };
@@ -402,14 +403,16 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                 auth,
                 storagePermission,
                 unknownUserDisplayName,
-                search: {
-                    header,
+                common: {
                     search,
                     searching: searchingMsg,
                     cancel,
-                    // allTeams,
                     from, to,
                     messagesFound,
+                },
+                search: {
+                    header,
+                    // allTeams,
                     searchUsersLabel,
                     searchUsersPlaceholder,
                 },
@@ -511,7 +514,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                                     <Dropdown disabled={dropdownDisabled} items={channelOptions[teamIdx]} value={channelOptions[teamIdx][channelIdx]} onChange={this.onChannelChanged} />
                                 </Flex>
                             </Flex.Item>
-                   </Segment>
+                    </Segment>
 
                     <Segment>
                         <Flex column gap="gap.small">
@@ -601,11 +604,13 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
      * This is memoized and recreated only when locale changes.
      */
     private searchTimeOptions: () => ShorthandCollection<DateRangeRadioGroupItemProps> = (() => {
-        let lastState: ISearchTabTranslation | null = null;
+        // let lastState: ISearchTabTranslation | null = null;
+        let lastState: ICommonMessage | null = null;
         let lastOptions: ShorthandCollection<DateRangeRadioGroupItemProps> = [];
 
         return () => {
-            if (this.state.t.search === lastState) {
+            //if (this.state.t.search === lastState) {
+            if (this.state.t.common === lastState) {
                 return lastOptions;
             }
 
@@ -615,7 +620,8 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                 searchTimePastMonth,
                 searchTimePastYear,
                 searchTimeCustom,
-            } = lastState = this.state.t.search;
+            } = lastState = this.state.t.common;
+            //} = lastState = this.state.t.search;
 
             return lastOptions = [
                 {

@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-import { IFindMsgTranslation } from "./IFindMsgTranslation";
+import { IMessageTranslation } from "./IMessageTranslation";
 import * as du from "../dateUtils";
 const dateFormat = "yyyy/MM/dd";
 const dateTimeFormat = "yyyy/MM/dd HH:mm";
 
 const appName = "KSearch";
 
-export const messages: IFindMsgTranslation = {
+export const messages: IMessageTranslation = {
     dateFormat,
     dateTimeFormat,
 
@@ -17,6 +17,41 @@ export const messages: IFindMsgTranslation = {
     showExpanded: "See more",
     unknownUserDisplayName: "(unknown)",
 
+    common: {
+        team: "team",
+        channel: "channel",
+        loadMore: "Load more",
+        allTeams: "(All Teams)",
+        allChannels: "(All Channels)",
+        from: "between",
+        to: "and",
+        messagesFound: (shown, total) => `${total} ${total === 1 ? "message" : "messages"} found ${total === shown ? "" : `- ${shown} displayed.`}`,
+        search: "search",
+        searching: "searching",
+        cancel: "cancel",
+        searchTimeAll: "All time",
+        searchTimePastWeek: "past week",
+        searchTimePastMonth: "past month",
+        searchTimePastYear: "past year",
+        searchTimeCustom: "custom",
+        syncEntity: entityName => `Syncing [${entityName}]...`,
+        syncEntityWithCount: (entityName: string, count: number) => `Syncing [${entityName}]... ${count}`,
+        syncSubEntity: (parentName: string, entityName: string) => `Syncing [${entityName}] of [${parentName}]...`,
+        syncSubEntityWithCount: (parentName: string, entityName: string, count: number) => `Syncing [${entityName}] of [${parentName}]... ${count}`,
+    },
+
+    entities: {
+        teams: "team list",
+        channels: "channel list",
+        messages: "messages",
+        users: "user list",
+        chats: "chat",
+        chatMembers: "chat member",
+        images: "image",
+        events: "schedule",
+        attendees: "attendee",
+    },
+
     auth: {
         loginButtonText: "Login",
         adminLoginButtonText: "Login as admin",
@@ -26,65 +61,6 @@ export const messages: IFindMsgTranslation = {
         unkownError: "Login failed. Reload the app to try again.",
         needConsent: "The user or administrator has not consented to use the application",
         serverError: "Could not connect to the login server. Please try again in a few minutes.",
-    },
-
-    topics: {
-        pageTitle: `${appName} - Topics`,
-        team: "team",
-        channel: "channel",
-        loadMore: "Load more",
-        allTeams: "(All Teams)",
-        allChannels: "(All Channels)",
-    },
-
-    topicsConfig: {
-        loading: "Loading, please wait.",
-        errorNoChannelId: "Error: Could not retrieve channel ID",
-        errorNoGroupId: "Error: Could not retrieve team ID",
-        errorNotInTeams: "Error: not inside Microsoft Teams",
-        errorPrivateChannel: "Error: Can not add this tab to a private channel",
-        headerConfigure: "Configure your tab",
-        labelTabName: "Tab name",
-        placeholderTabName: "Enter a name for the tab here",
-        defaultTabName: "Topics",
-    },
-
-    search: {
-        pageTitle: `${appName} - Channel search`,
-        header: "Search channel messages",
-        allTeams: "Search all teams and channels",
-        from: "between",
-        to: "and",
-        messagesFound: (shown, total) => `${total} ${total === 1 ? "message" : "messages"} found ${total === shown ? "" : `- ${shown} displayed.`}`,
-        search: "search",
-        searching: "searching",
-        cancel: "cancel",
-        searchTimeAll: "All time",
-        searchTimePastWeek: "past week",
-        searchTimePastMonth: "past month",
-        searchTimePastYear: "past year",
-        searchTimeCustom: "custom",
-        searchUsersLabel: "Display only messages from these users",
-        searchUsersPlaceholder: "(All Users)",
-    },
-
-    chatSearch: {
-        pageTitle: `${appName} - Chat search`,
-        header: "Search personal chat messages",
-        allChats: "Search all chats",
-        from: "between",
-        to: "and",
-        messagesFound: (shown, total) => `${total} ${total === 1 ? "message" : "messages"} found ${total === shown ? "" : `- ${shown} displayed.`}`,
-        search: "search",
-        searching: "searching",
-        cancel: "cancel",
-        searchTimeAll: "All time",
-        searchTimePastWeek: "past week",
-        searchTimePastMonth: "past month",
-        searchTimePastYear: "past year",
-        searchTimeCustom: "custom",
-        searchUsersLabel: "Display only messages from these users",
-        searchUsersPlaceholder: "(All Users)",
     },
 
     sync: {
@@ -105,13 +81,6 @@ export const messages: IFindMsgTranslation = {
         chatMessages: (c, n) => `Syncing chat messages of [${c}]... ${n}`,
     },
 
-    table: {
-        subject: "subject",
-        author: "author",
-        dateTime: "created",
-        body: "body",
-    },
-
     error: {
         indexedDbReadFailed: "Failed to access IndexedDB",
         searchFailed: "Search failed",
@@ -125,4 +94,85 @@ export const messages: IFindMsgTranslation = {
         linkInside: "Click here to grant permission",
         linkOutside: "Click here to grant permission in new window",
     },
+
+    topics: {
+        pageTitle: `${appName} - Topics`,
+        // team: "team",
+        // channel: "channel",
+        // loadMore: "Load more",
+        // allTeams: "(All Teams)",
+        // allChannels: "(All Channels)",
+    },
+
+    topicsConfig: {
+        loading: "Loading, please wait.",
+        errorNoChannelId: "Error: Could not retrieve channel ID",
+        errorNoGroupId: "Error: Could not retrieve team ID",
+        errorNotInTeams: "Error: not inside Microsoft Teams",
+        errorPrivateChannel: "Error: Can not add this tab to a private channel",
+        headerConfigure: "Configure your tab",
+        labelTabName: "Tab name",
+        placeholderTabName: "Enter a name for the tab here",
+        defaultTabName: "Topics",
+    },
+
+    search: {
+        pageTitle: `${appName} - Channel search`,
+        header: "Search channel messages",
+        // allTeams: "Search all teams and channels",
+        // from: "between",
+        // to: "and",
+        // messagesFound: (shown, total) => `${total} ${total === 1 ? "message" : "messages"} found ${total === shown ? "" : `- ${shown} displayed.`}`,
+        // search: "search",
+        // searching: "searching",
+        // cancel: "cancel",
+        // searchTimeAll: "All time",
+        // searchTimePastWeek: "past week",
+        // searchTimePastMonth: "past month",
+        // searchTimePastYear: "past year",
+        // searchTimeCustom: "custom",
+        searchUsersLabel: "Display only messages from these users",
+        searchUsersPlaceholder: "(All Users)",
+    },
+
+    chatSearch: {
+        pageTitle: `${appName} - Chat search`,
+        header: "Search personal chat messages",
+        allChats: "Search all chats",
+        // from: "between",
+        // to: "and",
+        // messagesFound: (shown, total) => `${total} ${total === 1 ? "message" : "messages"} found ${total === shown ? "" : `- ${shown} displayed.`}`,
+        // search: "search",
+        // searching: "searching",
+        // cancel: "cancel",
+        // searchTimeAll: "All time",
+        // searchTimePastWeek: "past week",
+        // searchTimePastMonth: "past month",
+        // searchTimePastYear: "past year",
+        // searchTimeCustom: "custom",
+        searchUsersLabel: "Display only messages from these users",
+        searchUsersPlaceholder: "(All Users)",
+    },
+
+    table: {
+        subject: "subject",
+        author: "author",
+        dateTime: "created",
+        body: "body",
+    },
+
+    schedule: {
+        pageTitle: `${appName} - Events`,
+    },
+
+    eventTable: {
+        subject: "subject",
+        organizer: "organizer",
+        start: "start",
+        end: "end",
+        attendees: "attendees",
+        body: "body",
+        allday: "(all day)",
+        notitle: "(no title)",
+        },
 }

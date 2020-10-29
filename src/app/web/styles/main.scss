@@ -75,3 +75,19 @@ mark.filter {
 		flex: 2 1 300px;
 	}
 }
+
+
+.eventTable {
+	.ui-table__cell:nth-child(1) {
+		flex: 1 1 200px;
+	}
+	.ui-table__cell:nth-child(2) {
+		flex: 0 0 12rem;
+	}
+	.ui-table__cell:nth-child(3) {
+		flex: 0 0 10rem;
+	}
+	.ui-table__cell:nth-child(4) {
+		flex: 2 1 300px;
+	}
+}

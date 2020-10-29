@@ -1,16 +1,16 @@
 import * as log from "../logger";
 import { messages as messages_en } from "./messages_en";
 import { messages as messages_ja } from "./messages_ja";
-import { IFindMsgTranslation } from "./IFindMsgTranslation";
+import { IMessageTranslation } from "./IMessageTranslation";
 
 
-const availableLocales: { [key: string]: IFindMsgTranslation | undefined } = Object.create(null);
+const availableLocales: { [key: string]: IMessageTranslation | undefined } = Object.create(null);
 availableLocales.en = messages_en;
 availableLocales.ja = messages_ja;
 
 const fallbackLocale = messages_en;
 
-export const get = (locale?: string | null): IFindMsgTranslation => {
+export const get = (locale?: string | null): IMessageTranslation => {
     if (locale) {
         let m = availableLocales[locale];
         if (m) return m;
