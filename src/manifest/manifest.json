@@ -66,6 +66,15 @@
             "scopes": [
                 "personal"
             ]
+        },
+        {
+            "entityId": "scheduleSearch",
+            "name": "Schedule Search",
+            "contentUrl": "https://{{HOSTNAME}}/FindMsgSearchSchedule/?theme={theme}&hint={loginHint}&eid={entityId}&uid={userObjectId}&tid={tid}&l={locale}",
+            "websiteUrl": "https://{{HOSTNAME}}/FindMsgSearchSchedule/?theme={theme}&hint={loginHint}&eid={entityId}&uid={userObjectId}&tid={tid}&l={locale}",
+            "scopes": [
+                "personal"
+            ]
         }
     ],
     "bots": [],

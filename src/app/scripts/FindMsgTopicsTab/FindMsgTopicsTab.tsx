@@ -14,7 +14,7 @@ import { MessageTable } from "./MessageTable";
 import { SyncWidget, SyncControl, SyncState } from "../SyncWidget";
 import { invalidDate } from "../dateUtils";
 import * as strings from '../i18n/messages';
-import { IFindMsgTranslation } from "../i18n/IFindMsgTranslation";
+import { IMessageTranslation } from "../i18n/IMessageTranslation";
 import { AI } from '../appInsights';
 import { getTopLevelMessagesLastSynced } from "../db/Sync";
 
@@ -50,7 +50,7 @@ export interface IFindMsgTopicsTabState extends ITeamsBaseComponentState, SyncSt
     authResult: AuthError | null;
     loginRequired: boolean;
 
-    t: IFindMsgTranslation;
+    t: IMessageTranslation;
 }
 
 
@@ -76,11 +76,11 @@ interface ISearchResult {
 
 export interface ITopicsTabTranslation {
     pageTitle: string;
-    team: string;
-    channel: string;
-    loadMore: string;
-    allTeams: string;
-    allChannels: string;
+    // team: string;
+    // channel: string;
+    // loadMore: string;
+    // allTeams: string;
+    // allChannels: string;
 }
 
 
@@ -209,13 +209,13 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             const teams = (await FindMsgTeam.getAll()).map(t => ({ ...t, channels: allChannels.filter(c => c.teamId === t.id) }));
 
             const allTeamsOption: DropdownItemPropsKey = {
-                header: t.topics.allTeams,
+                header: t.common.allTeams,
                 key: "",
                 selected: false,
             };
 
             const allChannelsOption: DropdownItemPropsKey = {
-                header: t.topics.allChannels,
+                header: t.common.allChannels,
                 key: "",
                 selected: false,
             };
@@ -347,7 +347,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
 
             searchResult: { messages, order, dir, hasMore },
             t: {
-                dateTimeFormat, topics, sync,
+                dateTimeFormat, common, sync,
                 table, footer, auth, filter,
                 unknownUserDisplayName,
             }
@@ -428,7 +428,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
 
                     <MessageTable t={table} dateFormat={dateTimeFormat} messages={messages} dir={dir} order={order} sort={this.getMessages} loading={loading} filter={filterString} unknownUserDisplayName={unknownUserDisplayName} />
 
-                    {hasMore && <Button onClick={this.loadMoreMessages} content={topics.loadMore} />}
+                    {hasMore && <Button onClick={this.loadMoreMessages} content={common.loadMore} />}
 
                     <div style={{ flex: 1 }} />
                     <Divider />

@@ -6,5 +6,6 @@
     "description.full": "チャネルメッセージ、チャットメッセージの検索およびチャネル表題一覧タブを提供しています。",
     "staticTabs[0].name": "チャネル検索",
     "staticTabs[1].name": "チャット検索",
-    "staticTabs[2].name": "表題一覧"
+    "staticTabs[2].name": "表題一覧",
+    "staticTabs[3].name": "スケジュール検索"
   }

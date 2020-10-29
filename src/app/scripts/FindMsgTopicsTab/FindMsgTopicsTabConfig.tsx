@@ -6,7 +6,7 @@ import { assert } from '../utils';
 import { Flex, Header, Input, Provider } from "../ui";
 import { AI } from '../appInsights';
 import * as strings from '../i18n/messages';
-import { IFindMsgTranslation } from "../i18n/IFindMsgTranslation";
+import { IMessageTranslation } from "../i18n/IMessageTranslation";
 
 
 export interface IFindMsgTopicsTabConfigState extends ITeamsBaseComponentState {
@@ -18,7 +18,7 @@ export interface IFindMsgTopicsTabConfigState extends ITeamsBaseComponentState {
     groupId: string;
     value: string;
     locale: string | null;
-    t: IFindMsgTranslation;
+    t: IMessageTranslation;
 }
 
 

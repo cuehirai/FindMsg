@@ -14,13 +14,14 @@ import { SearchResultView } from "./SearchResult";
 import * as du from "../dateUtils";
 import { SyncState, SyncControl, SyncWidget } from "../SyncWidget";
 import * as strings from '../i18n/messages';
-import { IFindMsgTranslation } from "../i18n/IFindMsgTranslation";
+import { IMessageTranslation } from "../i18n/IMessageTranslation";
 import { Page } from '../ui';
 import { StoragePermissionWidget } from "../StoragePermissionWidget";
 import { StoragePermissionIndicator } from "../StoragePermissionIndicator";
 import { AI } from '../appInsights';
 import { db, idx } from "../db/Database";
 import Dexie from "dexie";
+import { ICommonMessage } from "../i18n/ICommonMessage";
 
 
 declare type SearchUserItem = DropdownItemProps & { key: string };
@@ -74,26 +75,26 @@ export interface IFindMsgSearchChatState extends ITeamsBaseComponentState, IChat
     askForStoragePermission: boolean;
 
     teamsInfo: ITeamssInfo;
-    t: IFindMsgTranslation;
+    t: IMessageTranslation;
 }
 
 
 export interface IChatSearchTabTranslation {
     pageTitle: string;
     header: string;
-    search: string;
-    searching: string;
+    // search: string;
+    // searching: string;
     allChats: string;
-    from: string;
-    to: string;
-    messagesFound: (shown: number, total: number) => string;
-    cancel: string;
+    // from: string;
+    // to: string;
+    // messagesFound: (shown: number, total: number) => string;
+    // cancel: string;
 
-    searchTimeAll: string;
-    searchTimePastWeek: string;
-    searchTimePastMonth: string;
-    searchTimePastYear: string;
-    searchTimeCustom: string;
+    // searchTimeAll: string;
+    // searchTimePastWeek: string;
+    // searchTimePastMonth: string;
+    // searchTimePastYear: string;
+    // searchTimeCustom: string;
 
     searchUsersLabel: string;
     searchUsersPlaceholder: string;
@@ -225,14 +226,16 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                 auth,
                 storagePermission,
                 unknownUserDisplayName,
-                chatSearch: {
-                    header,
+                common: {
                     search,
                     searching: searchingMsg,
                     cancel,
-                    allChats,
                     from, to,
                     messagesFound,
+                },
+                chatSearch: {
+                    header,
+                    allChats,
                     searchUsersLabel,
                     searchUsersPlaceholder,
                 },
@@ -412,11 +415,13 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
      * This is memoized and recreated only when locale changes.
      */
     private searchTimeOptions: () => ShorthandCollection<DateRangeRadioGroupItemProps> = (() => {
-        let lastState: IChatSearchTabTranslation | null = null;
+        // let lastState: IChatSearchTabTranslation | null = null;
+        let lastState: ICommonMessage | null = null;
         let lastOptions: ShorthandCollection<DateRangeRadioGroupItemProps> = [];
 
         return () => {
-            if (this.state.t.chatSearch === lastState) {
+            // if (this.state.t.chatSearch === lastState) {
+            if (this.state.t.common === lastState) {
                 return lastOptions;
             }
 
@@ -426,7 +431,8 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                 searchTimePastMonth,
                 searchTimePastYear,
                 searchTimeCustom,
-            } = lastState = this.state.t.chatSearch;
+            } = lastState = this.state.t.common;
+            // } = lastState = this.state.t.chatSearch;
 
             return lastOptions = [
                 {
