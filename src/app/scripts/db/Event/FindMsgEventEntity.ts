@@ -267,7 +267,7 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
                 client: arg.client,
                 checkCancel: arg.checkCancel,
                 progress: arg.progress,
-                subentity: arg.subentity,
+                subentity: false,
                 parent: rec,
                 translate: arg.translate,
             };

@@ -1,9 +1,12 @@
+import { db, idx } from '../Database';
 import * as du from "../../dateUtils";
 import { Attendee, ResponseType } from "@microsoft/microsoft-graph-types-beta";
 import { DbAccessorBaseComponent, ISubEntityFunctionArg, ISyncFunctionArg, SubEntityFunction, SubEntytyAllFunction } from "../db-accessor-class-base";
 import { IFindMsgAttendeeDb } from "./IFindMsgAttendeeDb";
 import { IFindMsgAttendee } from "./IFindMsgAttendee";
 import { IFindMsgEvent } from "../Event/IFindMsgEvent";
+import * as log from '../../logger';
+import Dexie from 'dexie';
 
 export interface IParseAttendeeArg {
     id: string;
@@ -55,8 +58,17 @@ class AttendeeEntity<D extends IFindMsgAttendeeDb, T extends IFindMsgAttendee, A
     }
 
     protected async fetchApiAll(arg: ISyncFunctionArg): Promise<T[]> {
-        const res: Array<IFindMsgAttendee> = (arg.parent && (arg.parent as IFindMsgEvent).attendees) ?? [];
-        this.storeLastSynced(du.now());
+        const parent = arg.parent;
+        const res: Array<IFindMsgAttendee> = (parent && (parent as IFindMsgEvent).attendees) ?? [];
+        if (parent) {
+            await db.transaction("rw", db.events, db.attendees, async () => {
+                const delcount = db.attendees.where(idx.attendees.$eventId$id).between([parent.id || Dexie.minKey], [parent.id || Dexie.maxKey], true, true).delete;
+                log.info(`deleted [${delcount}] existing attendees for event [${parent.id}]`);
+                res.forEach(rec => this.put(rec as T));
+                log.info(`registered [${res.length}] attendees for event [${parent.id}]`)
+            });
+            this.storeLastSynced(du.now());
+        }
         return res as T[];
     }
 

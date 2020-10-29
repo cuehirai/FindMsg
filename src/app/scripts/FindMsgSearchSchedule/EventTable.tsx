@@ -5,28 +5,20 @@ import { Link, TriangleUpIcon, TriangleDownIcon, Table, Loader, TableRowProps, T
 import { IFindMsgEvent } from "../db/Event/IFindMsgEvent";
 import * as msTeams from '@microsoft/teams-js';
 import { format } from "../dateUtils";
-import { info } from '../logger'
+import * as log from '../logger'
 import { fixMessageLink } from "../utils";
 import { highlightNode, collapse, empty } from "../highlight";
 import { stripHtml } from "../purify";
 import { EventOrder } from "../db/Event/FindMsgEventEntity";
 import { OrderByDirection } from "../db/db-accessor-class-base";
+// import { Tooltip } from "office-ui-fabric-react/lib/components/Tooltip/Tooltip";
+// import { IFindMsgAttendee } from "../db/Attendee/IFindMsgAttendee";
+
 
 
 declare type sortFn = (order: EventOrder, dir: OrderByDirection,) => void;
 
 
-// export interface IMessageTableProps {
-//     messages: IFindMsgChannelMessage[];
-//     order: MessageOrder;
-//     dir: Direction;
-//     loading: boolean;
-//     sort: sortFn;
-//     t: IMessageTableTranslation;
-//     dateFormat: string;
-//     filter: string;
-//     unknownUserDisplayName: string;
-// }
 export interface IEventTableProps {
     events: IFindMsgEvent[];
     order: EventOrder;
@@ -158,11 +150,22 @@ export const EventTable: React.FunctionComponent<IEventTableProps> = ({ translat
             const res = n?? m?? u;
             return res;
         };
+        // const tooltip: (a: IFindMsgAttendee[]) => string = (a) => {
+        //     const arr: Array<string> = [];
+        //     a.forEach(rec => {
+        //         if (rec.name) {
+        //             arr.push(rec.name);
+        //         }
+        //     });
+        //     const res = translation.attendees + ": " + arr.join(", ");
+        //     log.info(`tooltip for attendee created: [${res}]`)
+        //     return res;
+        // }
         const EventTableRow: (msg: IFindMsgEvent) => TableRowProps = ({ id, subject, organizerName, organizerMail, start, end, isAllDay, body, type, webLink }) => ({
             key: id,
             items: [
-                { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(webLink), info)} disabled={!webLink}><EventContent body={title(subject, notitle)} type="text" filter={filter} /></Link> },
-                { key: 'o', truncateContent: true, content: organizer(organizerName, organizerMail, unknownUserDisplayName) },
+                { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(webLink), log.info)} disabled={!webLink}><EventContent body={title(subject, notitle)} type="text" filter={filter} /></Link> },
+                { key: 'o', truncateContent: true, content: organizer(organizerName, organizerMail, unknownUserDisplayName)},
                 { key: 't', truncateContent: false, content: stContent(start, end, isAllDay) },
                 { key: 'c', truncateContent: true, content: <EventContent body={body} type={type} filter={filter} /> }
             ],
