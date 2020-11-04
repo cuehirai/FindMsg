@@ -281,7 +281,7 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
 
             const cutOffTime = du.subMinutes(last, 5);
             const now = du.now();
-            const endtime = now;
+            const endtime = du.now();
             endtime.setFullYear(endtime.getFullYear() + 1);
 
             // const delta = `/me/calendarView/delta?startdatetime=${cutOffTime.toISOString()}&enddatetime=${now.toISOString()}`;
