@@ -34,6 +34,7 @@ export const messages: IMessageTranslation = {
         searchTimePastMonth: "1ヶ月以内",
         searchTimePastYear: "1年以内",
         searchTimeCustom: "指定の期間内",
+        noSelection: "(すべて)",
         syncEntity: entityName => `[${entityName}]を同期中...`,
         syncEntityWithCount: (entityName: string, count: number) => `[${entityName}]を同期中... ${count}`,
         syncSubEntity: (parentName: string, entityName: string) => `[${parentName}]の[${entityName}]を同期中...`,
@@ -163,11 +164,13 @@ export const messages: IMessageTranslation = {
 
     schedule: {
         pageTitle: `${appName} - スケジュール一覧`,
+        filterByStart: "開始日で絞り込む",
+        filterByOrganizer: "主催者で絞り込む",
     },
 
     eventTable: {
         subject: "件名",
-        organizer: "開催者",
+        organizer: "主催者",
         start: "開始",
         end: "終了",
         attendees: "参加者",

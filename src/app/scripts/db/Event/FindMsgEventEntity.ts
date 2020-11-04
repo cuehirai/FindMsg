@@ -3,7 +3,6 @@ import { db, idx } from '../Database';
 import * as du from "../../dateUtils";
 import { BodyType, Event } from "@microsoft/microsoft-graph-types-beta";
 import { FindMsgAttendee, IParseAttendeeArg } from "../Attendee/FindMsgAttendeeEntity";
-import { IFindMsgAttendeeDb } from "../Attendee/IFindMsgAttendeeDb";
 import { DbAccessorBaseComponent, ISubEntityFunctionArg, ISyncFunctionArg, OrderByDirection, SubEntityFunction, SubEntytyAllFunction, SyncError } from "../db-accessor-class-base";
 import { IFindMsgEvent } from "./IFindMsgEvent";
 import { IFindMsgEventDb } from "./IFindMsgEventDb";
@@ -31,7 +30,7 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
 
     lastSyncedKey = "FindMsg_events_last_synced";
 
-    isDeltaSyncAvailable = false;
+    isDeltaSyncAvailable = true;
     
     parseApi = async (api: A): Promise<T | null> => {
         let res: IFindMsgEvent | null = null;
@@ -178,15 +177,16 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
 
     protected putSubEntity: SubEntityFunction = async (arg: ISubEntityFunctionArg): Promise<void> => {
         const {parent} = arg;
-        const recs = (parent as IFindMsgEvent).attendees.map(e => FindMsgAttendee.toDbEntity(e));
+        const recs: Array<IFindMsgAttendee> = [];
+        (parent as IFindMsgEvent).attendees.forEach(rec => recs.push(rec));
         await FindMsgAttendee.putAll(recs);
     };
 
     protected putAllSubEntity: SubEntytyAllFunction = async (args: ISubEntityFunctionArg[]): Promise<void> => {
-        const recs: Array<IFindMsgAttendeeDb> = [];
+        const recs: Array<IFindMsgAttendee> = [];
         args.forEach(arg => {
             const {parent} = arg;
-            (parent as IFindMsgEvent).attendees.map(rec => FindMsgAttendee.toDbEntity(rec)).forEach(dbrec => {recs.push(dbrec)});
+            (parent as IFindMsgEvent).attendees.forEach(rec => recs.push(rec));
         })
         if (recs.length > 0) {
             FindMsgAttendee.putAll(recs);
@@ -203,6 +203,7 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
         try {
             arg.progress(arg.translate.common.syncEntity(arg.translate.entities.events));
             const existingIds = await db.events.toCollection().primaryKeys();
+            log.info(`existing eventIds: [${existingIds.join("], [")}]`);
 
             log.info(`calling API [/me/calendar/events]`);
 
@@ -210,6 +211,9 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
             .version('beta')
             .get();
             const fetched = await getAllPages<Event>(client, response);
+            fetched.forEach(rec => {
+                log.info(`id:[${rec.id?? "null"}], subject:[${rec.subject?? "null"}], isCancelled:[${rec.isCancelled?? "null"}], organizer:[${rec.organizer? rec.organizer.emailAddress? rec.organizer.emailAddress.name?? "null": "null": "null"}]`);
+            })
 
             if (fetched === null) {
                 if (existingIds.length === 0) {
@@ -230,14 +234,19 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
                         }
                     }));
     
-                    // delete teams that where not in the response from the local database.
+                    // DBにあってapiの戻りに存在しないイベントIDはDBから削除する.
                     const deletedIds = existingIds.filter(exist => !events.some(t => (t as IFindMsgEvent).id === exist));
-                    // delete the channels
-                    await Promise.all(deletedIds.map(async dtId => {
-                        const deletedAttendee = await db.attendees.where('eventId').equals(dtId).primaryKeys();
+                    log.info(`deleted eventIds: [${deletedIds.join("], [")}]`);
+                    deletedIds.forEach( async eId => {
+                        // 削除されるイベントに属する参加者レコードを先に削除しておく
+                        const deletedAttendee = await db.attendees.where('eventId').equals(eId).primaryKeys();
+                        log.info(`★★★ deleting Attendees due to event deletion; keys:[${deletedAttendee.join("], [")}]`);
                         await db.attendees.bulkDelete(deletedAttendee)
-                    }));
+                        log.info(`★★★ Attendees deletion completed`);
+                    })
+                    log.info(`★★★ deleting events; keys:[${deletedIds.join("], [")}]`);
                     await db.events.bulkDelete(deletedIds);
+                    log.info(`★★★ Events deletion completed`);
                 });
     
                 this.storeLastSynced(du.now());
@@ -255,12 +264,69 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
         return res as T[];
     }
 
-    protected async fetchApiDelta(): Promise<T[]>{
+    protected async fetchApiDelta(arg: ISyncFunctionArg): Promise<T[]>{
         const res: Array<IFindMsgEvent> = [];
+        const client = arg.client;
+        const last = this.getLastSynced();
+
+        if (!du.isValid(last)) {
+            throw new Error("last delta sync invalid");
+        }
+        if (du.isBefore(last, du.subDays(du.subMonths(du.now(), 7), 1))) {
+            throw new Error("last delta sync too old");
+        }
+
+        try {
+            arg.progress(arg.translate.common.syncEntity(arg.translate.entities.events));
+
+            const cutOffTime = du.subMinutes(last, 5);
+            const now = du.now();
+            const endtime = now;
+            endtime.setFullYear(endtime.getFullYear() + 1);
+
+            // const delta = `/me/calendarView/delta?startdatetime=${cutOffTime.toISOString()}&enddatetime=${now.toISOString()}`;
+            const delta = `/me/calendarView/delta?startdatetime=${cutOffTime.toISOString()}&enddatetime=${endtime.toISOString()}`;
+            log.info(`calling API [${delta}]`);
+            const response = await client.api(delta)
+                // .version('beta')
+                // .top(50) // max supported is 50
+                // .filter(`lastModifiedDateTime gt ${cutOffTime.toISOString()}`)
+                .get();
+
+            const fetched = await getAllPages<Event>(client, response);
+            fetched.forEach(rec => {
+                log.info(`id:[${rec.id?? "null"}], subject:[${rec.subject?? "null"}], isCancelled:[${rec.isCancelled?? "null"}], organizer:[${rec.organizer? rec.organizer.emailAddress? rec.organizer.emailAddress.name?? "null": "null": "null"}]`);
+            })
+
+            log.info(`API returned [${fetched.length}] events`);
+            await db.transaction("rw", db.events, db.attendees, async () => {
+                const events = await Promise.all(fetched.map(event => this.parseApi(event as A)));
+                let count = 0;
+                await Promise.all(events.map(t => {
+                    arg.checkCancel();
+                    if (t) {
+                        this.put(t);
+                        res.push(t);
+                        count += 1;
+                        arg.progress(arg.translate.common.syncEntityWithCount(arg.translate.entities.events, count));
+                    }
+                }));
+            });
+
+            this.storeLastSynced(now);
+        } catch (error) {
+            AI.trackException({
+                exception: error,
+                properties: {
+                    operation: nameof(this.fetchApiDelta),
+                }
+            });
+        }
         return res as T[];
     }
 
     protected async syncSubentity(arg: ISyncFunctionArg, parents: T[]): Promise<boolean>{
+        log.info(`▼▼▼▼▼ syncSubentity START for Event id: [${arg.parent? arg.parent.id : "null"}] ▼▼▼▼▼`);
         let res = true;
         parents.forEach(async rec => {
             const subarg: ISyncFunctionArg = {
@@ -273,6 +339,7 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
             };
             res = res && await FindMsgAttendee.sync(subarg);
         })
+        log.info(`▲▲▲▲▲ syncSubentity END for Event id: [${arg.parent? arg.parent.id : "null"}] ▲▲▲▲▲`);
         return res;
     }
 
@@ -287,7 +354,8 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
         return ({ subject, body, text }) => typeof text === "string" ? text.includes(t) : subject?.toLowerCase().includes(t) || body.toLowerCase().includes(t);
     }
 
-    async fetch(order: EventOrder, dir: OrderByDirection, offset = 0, limit = 0, filter = ""): Promise<[IFindMsgEvent[], boolean]> {
+    async fetch(order: EventOrder, dir: OrderByDirection, offset = 0, limit = 0, filter = "", from: Date, to: Date, organizer: Set<string>): Promise<[IFindMsgEvent[], boolean]> {
+        log.info(`▼▼▼ fetch START ▼▼▼`);
         const index = order2IdxMap[order];
 
         const collection = db.events.orderBy(index);
@@ -297,21 +365,53 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
         if (limit > 0) collection.limit(limit + 1);
         if (filter.trim()) collection.filter(this.createFilter(filter));
 
+        const fromValid = du.isValid(from);
+        const toValid = du.isValid(to);
+        if (fromValid || toValid) {
+            if (fromValid && toValid && du.isAfter(from, to)) [from, to] = [du.startOfDay(to), du.endOfDay(from)];
+            const fromN = from.valueOf();
+            const toN = to.valueOf();
+
+            if (fromValid && toValid) {
+                collection.filter(m => m.start >= fromN && m.start <= toN);
+            } else if (fromValid) {
+                collection.filter(m => m.start >= fromN);
+            } else {
+                collection.filter(m => m.start <= toN);
+            }
+        }
+    
+        if (organizer.size > 0) {
+            collection.filter(rec => organizer.has(rec.organizerName?? ""));
+        }
+
         const result = await collection.toArray();
 
         let hasMore = false;
 
+        log.info(`▲▲▲ fetch END ▲▲▲`);
         if (result.length > 0) {
             if (result.length > limit) {
                 result.pop();
                 hasMore = true;
             }
-
             return [result.map(r => this.fromDbEntity(r as D) as IFindMsgEvent), hasMore];
         }
-
         return [[], hasMore];
+    }
 
+    /** 主催者をすべて取得 */
+    async getOrganizers(): Promise<string[]> {
+        const all = await db.events.orderBy(idx.events.organizer$start$subject).toArray();
+        let orgbk = "";
+        const res: Array<string> = [];
+        all.forEach(rec => {
+            if (rec.organizerName && rec.organizerName != orgbk) {
+                orgbk = rec.organizerName;
+                res.push(orgbk);
+            }
+        })
+        return res;
     }
 
 }

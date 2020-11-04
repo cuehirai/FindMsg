@@ -35,6 +35,7 @@ const extraScopes = [
     "ChannelMember.Read.All",
     "ChannelMessage.Read.All",  // Allows an app to read a channel's messages in Microsoft Teams, on behalf of the signed-in user.
     "Chat.Read",                // Read personal 1-to-1 and group chats
+    "Calendars.Read",
 ];
 
 const consentScopes = [...requestScopesLogin, ...extraScopes];

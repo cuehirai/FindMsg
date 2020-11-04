@@ -2,7 +2,7 @@ import React from "react";
 import * as log from '../logger';
 import { IMyOwnState, initialDisplayCount, loadMoreCount, TeamsBaseComponentWithAuth } from "../msteams-react-base-component-with-auth";
 import { SyncWidget } from "../SyncWidget";
-import { Button, ComponentEventHandler, Flex, Input, InputProps, Segment } from "../ui";
+import { Button, Dropdown, Flex, Input, Segment, Text } from "../ui";
 import { cancellation, OperationCancelled } from "../utils";
 import { AI } from "../appInsights";
 import { EventTable } from "./EventTable";
@@ -13,6 +13,8 @@ import { IFindMsgEvent } from "../db/Event/IFindMsgEvent";
 
 export interface IFindMsgScheduleTranslation {
     pageTitle: string;
+    filterByStart: string;
+    filterByOrganizer: string;
 }
 
 interface ISearchResult {
@@ -97,15 +99,24 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
         };
     }
 
-    protected setMyState(): IMyOwnState {
+    protected setMyState(value?: ISearchResult): IMyOwnState {
         log.info(`▼▼▼ setMyState START ▼▼▼`);
         const me = (this.state.me as IFindMsgSearchScheduleState);
-        me.searchResult = {
-            events: [],
-            hasMore: false,
-            order: EventOrder.start,
-            dir: OrderByDirection.descending,
-            };
+        if (value) {
+            me.searchResult = {
+                events: value.events,
+                hasMore: value.hasMore,
+                order: value.order,
+                dir: value.dir,
+                };    
+        } else {
+            me.searchResult = {
+                events: [],
+                hasMore: false,
+                order: EventOrder.start,
+                dir: OrderByDirection.descending,
+                };    
+        }
         log.info(`▲▲▲ setMyState END ▲▲▲`);
         return me;
     }
@@ -116,48 +127,77 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
             loading,
             syncing, syncStatus, syncCancelled, lastSynced,
             filterInput,
+            searchUserOptions,
             translation: {
+                common: {
+                    noSelection,
+                },
+                schedule: {
+                    filterByStart,
+                    filterByOrganizer,
+                },
                 sync, filter,
             }
         } = this.state;
-
+    
         const res:JSX.Element = (
-            <Segment>
-                <Flex gap="gap.large">
-                    {/* <Flex.Item shrink={2}>
-                        {this.renderTeamAndChannelPulldown}
-                    </Flex.Item>
- */}
-                    <Flex.Item grow shrink>
-                        <Flex gap="gap.small">
-                            <Input
-                                type="text"
-                                label={filter}
-                                labelPosition="inline"
-                                value={filterInput}
-                                onChange={this.onFilterChanged}
-                            />
+            <div>
+                <Segment>
+                    <Flex gap="gap.large">
+                        <Flex.Item grow shrink>
+                            <Flex gap="gap.small">
+                                <Segment>
+                                    <Input
+                                        type="text"
+                                        label={filter}
+                                        labelPosition="above"
+                                        value={filterInput}
+                                        onChange={this.onFilterChanged}
+                                    />
+                                </Segment>
 
-                            <Flex.Item grow>
-                                <div />
-                            </Flex.Item>
+                                <Segment>
+                                    <Flex column gap="gap.small">
+                                        <Text content={filterByStart} />
+                                        {this.renderTermSelection()}
+                                    </Flex>
+                                </Segment>
 
-                            <Flex.Item align="start">
-                                <SyncWidget
-                                    t={sync}
-                                    syncStart={this.startSync}
-                                    syncCancel={this.cancelSync}
-                                    syncCancelled={syncCancelled}
-                                    syncStatus={syncStatus}
-                                    syncing={syncing}
-                                    lastSynced={lastSynced}
-                                    loading={loading}
-                                />
-                            </Flex.Item>
-                        </Flex>
-                    </Flex.Item>
-                </Flex>
-            </Segment>
+                                <Segment>
+                                    <Flex column>
+                                        <Text content={filterByOrganizer} />
+                                        <Dropdown
+                                            multiple clearable search
+                                            position="above"
+                                            placeholder={noSelection}
+                                            items={searchUserOptions}
+                                            onChange={this.onSearchUserChanged}
+                                        />
+                                    </Flex>
+                                </Segment>
+
+                                <Flex.Item grow>
+                                    <div />
+                                </Flex.Item>
+
+                                <Flex.Item align="start">
+                                    <SyncWidget
+                                        t={sync}
+                                        syncStart={this.startSync}
+                                        syncCancel={this.cancelSync}
+                                        syncCancelled={syncCancelled}
+                                        syncStatus={syncStatus}
+                                        syncing={syncing}
+                                        lastSynced={lastSynced}
+                                        loading={loading}
+                                    />
+                                </Flex.Item>
+                            </Flex>
+                        </Flex.Item>
+                    </Flex>
+                </Segment>
+
+            </div>
         );
         log.info(`▲▲▲ renderContentTop END ▲▲▲`);
         return res;
@@ -175,7 +215,7 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
         const { events, order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
 
         const res:JSX.Element = (
-            <EventTable translation={eventTable} dateFormat={dateFormat} dateTimeFormat={dateTimeFormat} events={events} dir={dir} order={order} sort={this.setStateCallBack} loading={loading} filter={filterString} unknownUserDisplayName={unknownUserDisplayName} />
+            <EventTable translation={eventTable} dateFormat={dateFormat} dateTimeFormat={dateTimeFormat} events={events} dir={dir} order={order} sort={this.getEvents} loading={loading} filter={filterString} unknownUserDisplayName={unknownUserDisplayName} />
         );
         log.info(`▲▲▲ renderContent END ▲▲▲`);
         return res;
@@ -191,44 +231,80 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
         const { hasMore } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
         let res:JSX.Element = <div/>;
         if (hasMore) {
-            res = <Button onClick={this.loadMoreMessages} content={common.loadMore} />;
+            res = <Button onClick={this.loadMoreEvents} content={common.loadMore} />;
         }
         log.info(`▲▲▲ renderContentBottom END ▲▲▲`);
         return res;
     }
 
-    protected setStateCallBack = async (): Promise<void> => {
-        this.getEvents();
-    };
+    // protected setStateCallBack = async (): Promise<void> => {
+    //     this.getUserOptions();
+    //     this.getEvents();
+    // };
     
-    private onFilterChanged: ComponentEventHandler<InputProps & { value: string; }> = (_: unknown, data): void => {
-        log.info(`▼▼▼ onFilterChanged START ▼▼▼`);
-        this.setState({ filterInput: data?.value ?? "" }, () => {
-            window.clearTimeout(this.filterTimeout);
-            this.filterTimeout = window.setTimeout(() => {
-                const { order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
-                this.getEvents(order, dir);
-            }, 250);
-        });
-        log.info(`▲▲▲ onFilterChanged END ▲▲▲`);
+    // protected onFilterChangedCallBack = async (): Promise<void> => {
+    //     const { order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
+    //     this.getEvents(order, dir);
+    // }
+
+    // protected onSearchUserChangedCallBack = async (): Promise<void> => {
+    //     const { order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
+    //     this.getEvents(order, dir);
+    // }
+    // protected onTeamOrChannelChangedCallBack = async (): Promise<void> => {
+    //     //実装なし
+    // }
+    // protected onDateRangeChangedCallBack = async (): Promise<void> => {
+    //     const { order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
+    //     this.getEvents(order, dir);
+    // }
+
+    protected setStateCallBack(): void {
+        this.getUserOptions();
+        this.getEvents();
+    }
+    
+    protected onFilterChangedCallBack(): void {
+        const { order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
+        this.getEvents(order, dir);
+    }
+
+    protected onSearchUserChangedCallBack(): void {
+        const { order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
+        this.getEvents(order, dir);
+    }
+    protected onTeamOrChannelChangedCallBack(): void {
+        //実装なし
+    }
+    protected onDateRangeChangedCallBack(): void {
+        const { order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
+        this.getEvents(order, dir);
     }
 
     private getEvents = async (order: EventOrder = EventOrder.start, dir: OrderByDirection = OrderByDirection.descending): Promise<void> => {
         log.info(`▼▼▼ getEvents START ▼▼▼`);
         const {
-            filterInput,
+            filterInput, searchTimeFrom, searchTimeTo, searchUsers,
         } = this.state;
 
         this.setState({ loading: true });
 
         try {
-            const [events, hasMore] = await FindMsgEvent.fetch(order, dir, 0, initialDisplayCount, filterInput);
+            const userIds = new Set<string>(searchUsers.map((u) => u.key));
+            const [events, hasMore] = await FindMsgEvent.fetch(order, dir, 0, initialDisplayCount, filterInput, searchTimeFrom, searchTimeTo, userIds);
             log.info(` ★★★ fetched [${events.length}] events from DB ★★★`);
-            const me = (this.state.me as IFindMsgSearchScheduleState)
-            me.searchResult = { hasMore, events, dir, order }
+            const value: ISearchResult = {
+                events: events,
+                hasMore: hasMore,
+                order: order,
+                dir: dir,
+            };
             this.setState({
                 filterString: filterInput,
-                me: me,
+                searchTimeFrom: searchTimeFrom,
+                searchTimeTo: searchTimeTo,
+                searchUsers: searchUsers,
+                me: this.setMyState(value),
             });
         } catch (error) {
             AI.trackException({ exception: error });
@@ -240,17 +316,18 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
 
     };
 
-    private loadMoreMessages = async () => {
-        log.info(`▼▼▼ loadMoreMessages START ▼▼▼`);
+    private loadMoreEvents = async () => {
+        log.info(`▼▼▼ loadMoreEvents START ▼▼▼`);
         const {
-            filterInput,
+            filterInput, searchTimeFrom, searchTimeTo, searchUsers,
         } = this.state;
         const searchResult = (this.state.me as IFindMsgSearchScheduleState).searchResult
 
         try {
             this.setState({ loading: true });
 
-            const [newEvents, hasMore] = await FindMsgEvent.fetch(searchResult.order, searchResult.dir, searchResult.events.length, loadMoreCount, filterInput);
+            const userIds = new Set<string>(searchUsers.map((u) => u.key));
+            const [newEvents, hasMore] = await FindMsgEvent.fetch(searchResult.order, searchResult.dir, searchResult.events.length, loadMoreCount, filterInput, searchTimeFrom, searchTimeTo, userIds);
 
             const me = (this.state.me as IFindMsgSearchScheduleState)
             me.searchResult = {
@@ -269,7 +346,23 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
         } finally {
             this.setState({ loading: false });
         }
-        log.info(`▲▲▲ loadMoreMessages END ▲▲▲`);
+        log.info(`▲▲▲ loadMoreEvents END ▲▲▲`);
+    }
+
+    /**
+     * ユーザオプションは主催者（Teamsのユーザとは限らない）なのでオーバーライド
+     */
+    protected getUserOptions = async (): Promise<void> => {
+        try {
+            const users = await FindMsgEvent.getOrganizers();
+            const searchUserOptions = users.map((rec) => ({ key: rec, header: rec }));
+
+            this.setState({ searchUserOptions });
+        }
+        catch (error) {
+            AI.trackException({ exception: error });
+            this.setError(error, this.state.translation.error.indexedDbReadFailed);
+        }
     }
 
 }

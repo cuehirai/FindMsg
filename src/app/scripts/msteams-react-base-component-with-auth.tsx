@@ -8,16 +8,18 @@ import * as microsoftTeams from "@microsoft/teams-js";
 import { assertT, nop, progressFn, storage } from "./utils";
 import * as strings from './i18n/messages';
 import * as log from './logger';
-import { ComponentEventHandler, Alert, AlertProps, Dialog, Divider, Provider, Text, Page, DropdownItemProps, DropdownProps, Flex, Dropdown, RadioGroup, RadioGroupItemProps, ShorthandCollection, DatePicker } from "./ui";
+import { ComponentEventHandler, Alert, AlertProps, Dialog, Divider, Provider, Text, Page, DropdownItemProps, DropdownProps, Flex, Dropdown, RadioGroup, RadioGroupItemProps, ShorthandCollection, DatePicker, InputProps } from "./ui";
 import { AI } from "./appInsights";
 import * as du from "./dateUtils";
 import { SyncControl, SyncState } from "./SyncWidget";
 import { invalidDate } from "./dateUtils";
-import { FindMsgChannel, FindMsgTeam } from "./db";
+import { FindMsgChannel, FindMsgTeam, FindMsgUserCache } from "./db";
 import { ICommonMessage } from "./i18n/ICommonMessage";
 import { StoragePermissionIndicator } from "./StoragePermissionIndicator";
 import { StoragePermissionWidget } from "./StoragePermissionWidget";
 
+/** ユーザ選択コンボボックスの要素タイプ */
+export declare type SearchUserItem = DropdownItemProps & { key: string };
 /** コンボボックス選択肢要素のタイプ */
 export declare type DropdownItemPropsKey = DropdownItemProps & { key: string };
 /** hasMore制御が必要な場合の標準初期表示件数 */
@@ -81,6 +83,11 @@ export interface ITeamsAuthComponentState extends ITeamsBaseComponentState, Sync
     searchTimeFrom: Date;
     /** 日付範囲（to） */
     searchTimeTo: Date;   
+
+    /** ユーザ選択プルダウンで選択されているユーザ */
+    searchUsers: SearchUserItem[];
+    /** ユーザ選択プルダウンの選択肢 */
+    searchUserOptions: ShorthandCollection<DropdownItemProps>;
 
     /** 認証プロバイダのコールバック */
     authInProgress: AuthProviderCallback;
@@ -149,6 +156,9 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             searchTime: DateRange.AllTime,
             searchTimeFrom: du.invalidDate(),
             searchTimeTo: du.invalidDate(),
+
+            searchUsers: [],
+            searchUserOptions: [],
 
             teamsInfo: {
                 channelId: cid ?? "",
@@ -226,9 +236,29 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
     protected abstract renderContentBottom(): JSX.Element
 
     /**
-     * オーバーライドしてsetStateのコールバックを実装してください。
+     * オーバーライドしてinitBaseInfoにおけるsetStateのコールバックを実装してください。
      */
-    protected abstract async setStateCallBack(): Promise<void> 
+    protected abstract setStateCallBack(): void;
+    
+    /**
+     * オーバーライドしてonFilterChangedにおけるsetStateのコールバックを実装してください。
+     */
+    protected abstract onFilterChangedCallBack(): void;
+
+    /**
+     * オーバーライドしてonSearchUserChangedにおけるsetStateのコールバックを実装してください。
+     */
+    protected abstract onSearchUserChangedCallBack(): void;
+
+    /***
+     * オーバーライドしてonTeamChanged/onChannelChangedにおけるsetStateのコールバックを実装してください。
+     */
+    protected abstract onTeamOrChannelChangedCallBack(): void;
+
+    /**
+     * オーバーライドしてsearchTimeOptionChangedにおけるsetStateのコールバックを実装してください。
+     */
+    protected abstract onDateRangeChangedCallBack(): void;
 
     /**
      * Graphからのデータを同期する場合はオーバーライドして同期処理を実装してください。
@@ -329,11 +359,9 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
                         // variables={{ urgent: true }}
                         onVisibleChange={this.warningVisibilityChanged}
                     />}
-
                     {askForStoragePermission && <StoragePermissionWidget granted={this.storagePermissionGranted} t={storagePermission} />}
 
                     {content}
-
                     {contentBottom}
 
                     <div style={{ flex: 1 }} />
@@ -346,6 +374,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
                 </Page>
             </Provider >
         );
+        log.info(res);
         log.info(`▲▲▲ render END ▲▲▲`);
 
         return res;
@@ -467,6 +496,25 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
     }
 
     /**
+     * (ユーティリティ)ユーザ選択プルダウン
+     */
+    protected getUserOptions = async (): Promise<void> => {
+        try {
+            const userCache = await FindMsgUserCache.getInstance();
+
+            const { unknownUserDisplayName } = this.state.translation;
+            const users = await userCache.getKnownUsers();
+            const searchUserOptions = users.map(({ id, displayName }) => ({ key: id, header: displayName || unknownUserDisplayName }));
+
+            this.setState({ searchUserOptions });
+        }
+        catch (error) {
+            AI.trackException({ exception: error });
+            this.setError(error, this.state.translation.error.indexedDbReadFailed);
+        }
+    }
+
+    /**
      * (ユーティリティ)Team＋channelプルダウン
      */
     protected renderTeamAndChannelPulldown(): JSX.Element {
@@ -491,73 +539,31 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
     }
 
     /**
-     * (ユーティリティ)TeamコンボボックスのChangeイベント
-     * 実装例：`<Dropdown disabled={dropdownDisabled} items={teamOptions} value={teamOptions[teamIdx]} onChange={this.onTeamChanged} />`
-     * @param _ 
-     * @param data 
-     */
-    protected onTeamChanged = (_: unknown, data: DropdownProps): void => {
-        log.info(`▼▼▼ onTeamChanged START ▼▼▼`);
-        const selected = data.value as DropdownItemPropsKey;
-        const { teamsInfo } = this.state;
-        const { teamOptions, channelOptions } = teamsInfo;
-
-        const newIdx = teamOptions.findIndex(t => t.key === selected.key);
-        const newOpts = teamOptions.map((to, i) => ({ ...to, selected: i === newIdx }));
-
-        const newChannelIdx = Math.max(0, channelOptions[newIdx].findIndex(co => co.selected));
-        channelOptions[newIdx][newChannelIdx].selected = true;
-
-        this.setState({
-            teamIdx: newIdx,
-            channelIdx: newChannelIdx,
-            teamsInfo: {
-                ...teamsInfo,
-                teamOptions: newOpts,
-                channelId: channelOptions[newIdx][newChannelIdx].key,
-                groupId: teamOptions[newIdx].key,
-            }
-        }, this.setStateCallBack);
-        log.info(`▲▲▲ onTeamChanged END ▲▲▲`);
-    }
-
-    /** 永続化ストレージ許可済みをセット */
-    protected storagePermissionGranted = (): void => {
-        this.setState({ askForStoragePermission: false });
-    }
-
-    /**
-     * (ユーティリティ)ChannelコンボボックスのChangeイベント
-     * 実装例：<Dropdown disabled={dropdownDisabled} items={channelOptions[teamIdx]} value={channelOptions[teamIdx][channelIdx]} onChange={this.onChannelChanged} />
-     * @param _ 
-     * @param data 
-     */
-    protected onChannelChanged = (_: unknown, data: DropdownProps): void => {
-        log.info(`▼▼▼ onChannelChanged START ▼▼▼`);
-        const selected = data.value as DropdownItemPropsKey;
-        const { teamIdx, channelIdx, teamsInfo } = this.state;
-        const { channelOptions } = teamsInfo;
-
-        const newIdx = channelOptions[teamIdx].findIndex(t => t.key === selected.key);
-        channelOptions[teamIdx] = channelOptions[teamIdx].map((co, i) => (i === channelIdx || i === newIdx) ? { ...co, selected: i === newIdx } : co);
-
-        this.setState({
-            channelIdx: newIdx,
-            teamsInfo: {
-                ...teamsInfo,
-                channelId: channelOptions[teamIdx][newIdx].key,
-            }
-        }, this.setStateCallBack);
-        log.info(`▲▲▲ onChannelChanged END ▲▲▲`);
-    }
-
-    /**
      * (ユーティリティ)日付範囲選択オプション
      */
     protected renderTermSelection(): JSX.Element {
         log.info(`▼▼▼ renderTermSelection START ▼▼▼`);
         const {
             searchTime,
+        } = this.state;
+
+        const res: JSX.Element = (
+            <Flex column gap="gap.small">
+                <RadioGroup checkedValue={searchTime} items={this.searchTimeOptions()} onCheckedValueChange={this.searchTimeOptionChanged} />
+                {searchTime === DateRange.Custom && this.renderCustomTerm()}
+            </Flex>
+        );
+        log.info(`▲▲▲ renderTermSelection END ▲▲▲`);
+
+        return res;
+    }
+
+    /**
+     * (ユーティリティ)カスタム日付範囲指定
+     */
+    protected renderCustomTerm(): JSX.Element {
+        log.info(`▼▼▼ renderCustomTerm START ▼▼▼`);
+        const {
             searchTimeFrom,
             searchTimeTo,
             translation: {
@@ -568,15 +574,12 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         } = this.state;
 
         const res: JSX.Element = (
-            <Flex column gap="gap.small">
-                <RadioGroup checkedValue={searchTime} items={this.searchTimeOptions()} onCheckedValueChange={this.searchTimeOptionChanged} />
-                {searchTime === DateRange.Custom && <Flex gap="gap.medium">
-                    <DatePicker label={from} value={searchTimeFrom} onSelectDate={this.searchTimeFromChanged} formatDate={this.formatDate} />
-                    <DatePicker label={to} value={searchTimeTo} onSelectDate={this.searchTimeToChanged} formatDate={this.formatDate} />
-                </Flex>}
+            <Flex gap="gap.medium">
+                <DatePicker label={from} value={searchTimeFrom} onSelectDate={this.searchTimeFromChanged} formatDate={this.formatDate} />
+                <DatePicker label={to} value={searchTimeTo} onSelectDate={this.searchTimeToChanged} formatDate={this.formatDate} />
             </Flex>
         );
-        log.info(`▲▲▲ renderTermSelection END ▲▲▲`);
+        log.info(`▲▲▲ renderCustomTerm END ▲▲▲`);
 
         return res;
     }
@@ -636,6 +639,94 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         };
     })();
 
+    /** 永続化ストレージ許可済みをセット */
+    protected storagePermissionGranted = (): void => {
+        this.setState({ askForStoragePermission: false });
+    }
+
+    /**
+     * (ユーティリティ)ユーザ選択プルダウンのChangeイベント
+     * @param _e 
+     * @param data 
+     */
+    protected onSearchUserChanged = (_e: unknown, data: DropdownProps):void => {
+        const values = data.value as SearchUserItem[];
+        this.setState({ searchUsers: [...values] }, this.onSearchUserChangedCallBack);
+    };
+
+    /**
+     * (ユーティリティ)フィルタのChangeイベント
+     * 実装例：<Input type="text"label={filter} labelPosition="inline" value={filterInput} onChange={this.onFilterChanged} />
+     * @param _ 
+     * @param data 
+     */
+    protected onFilterChanged: ComponentEventHandler<InputProps & { value: string; }> = (_: unknown, data): void => {
+        log.info(`▼▼▼ onFilterChanged START ▼▼▼`);
+        this.setState({ filterInput: data?.value ?? "" }, () => {
+            window.clearTimeout(this.filterTimeout);
+            this.filterTimeout = window.setTimeout(() => {
+                this.onFilterChangedCallBack();
+            }, 250);
+        });
+        log.info(`▲▲▲ onFilterChanged END ▲▲▲`);
+    }
+
+    /**
+     * (ユーティリティ)TeamコンボボックスのChangeイベント
+     * 実装例：`<Dropdown disabled={dropdownDisabled} items={teamOptions} value={teamOptions[teamIdx]} onChange={this.onTeamChanged} />`
+     * @param _ 
+     * @param data 
+     */
+    protected onTeamChanged = (_: unknown, data: DropdownProps): void => {
+        log.info(`▼▼▼ onTeamChanged START ▼▼▼`);
+        const selected = data.value as DropdownItemPropsKey;
+        const { teamsInfo } = this.state;
+        const { teamOptions, channelOptions } = teamsInfo;
+
+        const newIdx = teamOptions.findIndex(t => t.key === selected.key);
+        const newOpts = teamOptions.map((to, i) => ({ ...to, selected: i === newIdx }));
+
+        const newChannelIdx = Math.max(0, channelOptions[newIdx].findIndex(co => co.selected));
+        channelOptions[newIdx][newChannelIdx].selected = true;
+
+        this.setState({
+            teamIdx: newIdx,
+            channelIdx: newChannelIdx,
+            teamsInfo: {
+                ...teamsInfo,
+                teamOptions: newOpts,
+                channelId: channelOptions[newIdx][newChannelIdx].key,
+                groupId: teamOptions[newIdx].key,
+            }
+        }, this.onTeamOrChannelChangedCallBack);
+        log.info(`▲▲▲ onTeamChanged END ▲▲▲`);
+    }
+
+    /**
+     * (ユーティリティ)ChannelコンボボックスのChangeイベント
+     * 実装例：<Dropdown disabled={dropdownDisabled} items={channelOptions[teamIdx]} value={channelOptions[teamIdx][channelIdx]} onChange={this.onChannelChanged} />
+     * @param _ 
+     * @param data 
+     */
+    protected onChannelChanged = (_: unknown, data: DropdownProps): void => {
+        log.info(`▼▼▼ onChannelChanged START ▼▼▼`);
+        const selected = data.value as DropdownItemPropsKey;
+        const { teamIdx, channelIdx, teamsInfo } = this.state;
+        const { channelOptions } = teamsInfo;
+
+        const newIdx = channelOptions[teamIdx].findIndex(t => t.key === selected.key);
+        channelOptions[teamIdx] = channelOptions[teamIdx].map((co, i) => (i === channelIdx || i === newIdx) ? { ...co, selected: i === newIdx } : co);
+
+        this.setState({
+            channelIdx: newIdx,
+            teamsInfo: {
+                ...teamsInfo,
+                channelId: channelOptions[teamIdx][newIdx].key,
+            }
+        }, this.onTeamOrChannelChangedCallBack);
+        log.info(`▲▲▲ onChannelChanged END ▲▲▲`);
+    }
+
     /**
      * (ユーティリティ)日付範囲オプションのchangeイベント
      * 実装例：`<RadioGroup checkedValue={searchTime} items={this.searchTimeOptions()} onCheckedValueChange={this.searchTimeOptionChanged} />`
@@ -656,7 +747,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
                 searchTime: assertT(value, typeof DateRange.AllTime),
                 searchTimeFrom: assertT(this.getDateFrom(value), du.isDate),
                 searchTimeTo: assertT(this.getDateTo(value), du.isDate),
-            });
+            }, this.onDateRangeChangedCallBack);
         } catch (error) {
             AI.trackException({ exception: error });
             this.setError(error, this.state.translation.error.internalError);
@@ -672,7 +763,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
      */
     protected searchTimeFromChanged = (d: Date | undefined | null): void => {
         log.info(`▼▼▼ searchTimeFromChanged START ▼▼▼`);
-        if (d) this.setState({ searchTimeFrom: du.startOfDay(d) })
+        if (d) this.setState({ searchTimeFrom: du.startOfDay(d) }, this.onDateRangeChangedCallBack)
         log.info(`▲▲▲ searchTimeFromChanged END ▲▲▲`);
     };
 
@@ -683,7 +774,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
      */
     protected searchTimeToChanged = (d: Date | undefined | null): void => {
         log.info(`▼▼▼ searchTimeToChanged START ▼▼▼`);
-        if (d) this.setState({ searchTimeTo: du.endOfDay(d) })
+        if (d) this.setState({ searchTimeTo: du.endOfDay(d) }, this.onDateRangeChangedCallBack)
         log.info(`▲▲▲ searchTimeToChanged END ▲▲▲`);
     };
 

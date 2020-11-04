@@ -33,6 +33,8 @@ export interface ICommonMessage {
     searchTimePastYear: string;
     /** 指定の期間内 */
     searchTimeCustom: string;
+    /** (すべて) */
+    noSelection: string;
 
     /** {0}を同期中... */
     syncEntity: (entityName: string) => string;
