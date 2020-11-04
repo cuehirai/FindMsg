@@ -188,10 +188,16 @@ export const EventTable: React.FunctionComponent<IEventTableProps> = ({ translat
             );
         };
 
+        const deeplink : (eventId: string) => string = (eventId) => {
+            const link = `https://teams.microsoft.com/_#/scheduling-form/?eventId=${eventId}&opener=1&providerType=0`;
+            log.info(`deeplink url: [${link}]`);
+            return link;
+        };
+
         const EventTableRow: (msg: IFindMsgEvent) => TableRowProps = ({ id, subject, organizerName, organizerMail, attendees, start, end, isAllDay, body, type, webLink }) => ({
             key: id,
             items: [
-                { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(webLink), log.info)} disabled={!webLink}><EventContent body={title(subject, notitle)} type="text" filter={filter} /></Link> },
+                { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(deeplink(id)), log.info)} disabled={!webLink}><EventContent body={title(subject, notitle)} type="text" filter={filter} /></Link> },
                 { key: 'o', truncateContent: true, content: organizerWithAttendeeTooltip(organizerName, organizerMail, unknownUserDisplayName, attendees) },
                 { key: 't', truncateContent: false, content: stContent(start, end, isAllDay) },
                 { key: 'c', truncateContent: true, content: <EventContent body={body} type={type} filter={filter} /> }
