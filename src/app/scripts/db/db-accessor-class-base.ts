@@ -245,12 +245,12 @@ export abstract class DbAccessorBaseComponent<D extends IDbEntityBase, T extends
             if (needFullSync) {
                 log.info(`▼▼▼▼▼ Starting full sync for [${this.tableName}] ▼▼▼▼▼`);
                 (await this.fetchApiAll(arg)).map(rec => result.push(rec));               
-                log.info(`▲▲▲▲▲ Starting full sync for [${this.tableName}] ▲▲▲▲▲`);
+                log.info(`▲▲▲▲▲ Finished full sync for [${this.tableName}] ▲▲▲▲▲`);
             }
             else {
                 log.info(`▼▼▼▼▼ Starting incremental sync for [${this.tableName}] ▼▼▼▼▼`);
                 (await this.fetchApiDelta(arg)).map(rec => result.push(rec));
-                log.info(`▲▲▲▲▲ Starting incremental sync for [${this.tableName}] ▲▲▲▲▲`);
+                log.info(`▲▲▲▲▲ Finished incremental sync for [${this.tableName}] ▲▲▲▲▲`);
             }
             res = true;
 

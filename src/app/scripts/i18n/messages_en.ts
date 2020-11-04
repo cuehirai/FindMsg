@@ -34,6 +34,7 @@ export const messages: IMessageTranslation = {
         searchTimePastMonth: "past month",
         searchTimePastYear: "past year",
         searchTimeCustom: "custom",
+        noSelection: "(All)",
         syncEntity: entityName => `Syncing [${entityName}]...`,
         syncEntityWithCount: (entityName: string, count: number) => `Syncing [${entityName}]... ${count}`,
         syncSubEntity: (parentName: string, entityName: string) => `Syncing [${entityName}] of [${parentName}]...`,
@@ -163,6 +164,8 @@ export const messages: IMessageTranslation = {
 
     schedule: {
         pageTitle: `${appName} - Events`,
+        filterByStart: "Filter by start",
+        filterByOrganizer: "Filter by organizer",
     },
 
     eventTable: {

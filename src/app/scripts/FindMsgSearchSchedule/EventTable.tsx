@@ -11,9 +11,8 @@ import { highlightNode, collapse, empty } from "../highlight";
 import { stripHtml } from "../purify";
 import { EventOrder } from "../db/Event/FindMsgEventEntity";
 import { OrderByDirection } from "../db/db-accessor-class-base";
-// import { Tooltip } from "office-ui-fabric-react/lib/components/Tooltip/Tooltip";
-// import { IFindMsgAttendee } from "../db/Attendee/IFindMsgAttendee";
-
+import { IFindMsgAttendee } from "../db/Attendee/IFindMsgAttendee";
+import { Button, Chip, Tooltip, Typography, withStyles } from "@material-ui/core";
 
 
 declare type sortFn = (order: EventOrder, dir: OrderByDirection,) => void;
@@ -63,7 +62,7 @@ const emptyStyle: ComponentSlotStyle = {
 };
 
 
-const emptyRows: ShorthandCollection<TableRowProps> = [{ key: 'empty', children: <div>No messages to display</div>, styles: emptyStyle }];
+const emptyRows: ShorthandCollection<TableRowProps> = [{ key: 'empty', children: <div>No events to display</div>, styles: emptyStyle }];
 const loadingRows: ShorthandCollection<TableRowProps> = [{ key: 'loading', children: <Loader />, styles: emptyStyle }];
 
 
@@ -146,26 +145,54 @@ export const EventTable: React.FunctionComponent<IEventTableProps> = ({ translat
             }
             return res;
         };
-        const organizer: (n: string | null, m: string | null, u:string) => string = (n, m, u) => {
-            const res = n?? m?? u;
-            return res;
+
+        const HtmlTooltip = withStyles((theme) => ({
+            tooltip: {
+                backgroundColor: '#f5f5f9',
+                color: 'rgba(0, 0, 0, 0.87)',
+                maxWidth: 800,
+                fontSize: theme.typography.pxToRem(12),
+                border: '1px solid #dadde9',
+            },
+        }))(Tooltip);
+        
+        const ChipsArray: (a: IFindMsgAttendee[]) => JSX.Element = (a) => {
+            const chipData: Array<JSX.Element> = [];
+            a.forEach(rec => {
+                if (rec.name) {
+                    chipData.push(<Chip label={rec.name}/>)
+                }
+            });
+            return (
+                <div  className="attendeeTooltip">
+                    {chipData}
+                </div>
+            );
         };
-        // const tooltip: (a: IFindMsgAttendee[]) => string = (a) => {
-        //     const arr: Array<string> = [];
-        //     a.forEach(rec => {
-        //         if (rec.name) {
-        //             arr.push(rec.name);
-        //         }
-        //     });
-        //     const res = translation.attendees + ": " + arr.join(", ");
-        //     log.info(`tooltip for attendee created: [${res}]`)
-        //     return res;
-        // }
-        const EventTableRow: (msg: IFindMsgEvent) => TableRowProps = ({ id, subject, organizerName, organizerMail, start, end, isAllDay, body, type, webLink }) => ({
+        
+        const organizerWithAttendeeTooltip : (n: string | null, m: string | null, u:string, a: IFindMsgAttendee[]) => JSX.Element = (n, m, u, a) => {
+            const organazer = n?? m?? u;
+            return (
+              <div>
+                <HtmlTooltip
+                  title={
+                    <React.Fragment>
+                      <Typography color="inherit">{translation.attendees}</Typography>
+                      {ChipsArray(a)}
+                    </React.Fragment>
+                  }
+                >
+                  <Button>{organazer}</Button>
+                </HtmlTooltip>
+              </div>
+            );
+        };
+
+        const EventTableRow: (msg: IFindMsgEvent) => TableRowProps = ({ id, subject, organizerName, organizerMail, attendees, start, end, isAllDay, body, type, webLink }) => ({
             key: id,
             items: [
                 { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(webLink), log.info)} disabled={!webLink}><EventContent body={title(subject, notitle)} type="text" filter={filter} /></Link> },
-                { key: 'o', truncateContent: true, content: organizer(organizerName, organizerMail, unknownUserDisplayName)},
+                { key: 'o', truncateContent: true, content: organizerWithAttendeeTooltip(organizerName, organizerMail, unknownUserDisplayName, attendees) },
                 { key: 't', truncateContent: false, content: stContent(start, end, isAllDay) },
                 { key: 'c', truncateContent: true, content: <EventContent body={body} type={type} filter={filter} /> }
             ],
