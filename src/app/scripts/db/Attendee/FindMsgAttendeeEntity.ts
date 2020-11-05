@@ -8,11 +8,19 @@ import { IFindMsgEvent } from "../Event/IFindMsgEvent";
 import * as log from '../../logger';
 import Dexie from 'dexie';
 
+/**
+ * 参加者のAPIデータをアプリ用に変換する際の引数に含めるインターフェース
+ * ※このテーブルはEventの属性として含まれるデータをもとにするので参加者のIDやEventのIDはアプリで与える必要があります。
+ * このためparseApiの引数としてこれらの情報を渡します。
+ */
 export interface IParseAttendeeArg {
+    /** 参加者のID */
     id: string;
+    /** 親であるEventのID */
     eventId: string;
 }
 
+/** イベントの参加者エンティティ管理クラス */
 class AttendeeEntity<D extends IFindMsgAttendeeDb, T extends IFindMsgAttendee, A extends Attendee> extends DbAccessorBaseComponent<D, T, A> {
     tableName = "attendees";
 

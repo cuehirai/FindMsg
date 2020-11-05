@@ -1,23 +1,27 @@
 import * as React from "react";
+import { Button, Typography } from "@material-ui/core";
+import * as msTeams from '@microsoft/teams-js';
 
 import { Link, TriangleUpIcon, TriangleDownIcon, Table, Loader, TableRowProps, TableCellProps, ShorthandValue, ShorthandCollection, ComponentSlotStyle } from "../ui";
-
-import { IFindMsgEvent } from "../db/Event/IFindMsgEvent";
-import * as msTeams from '@microsoft/teams-js';
+import { ChipsArray, ContentElement, HtmlTooltip } from "../ui-jsx";
+import { fixMessageLink } from "../utils";
 import { format } from "../dateUtils";
 import * as log from '../logger'
-import { fixMessageLink } from "../utils";
-import { highlightNode, collapse, empty } from "../highlight";
-import { stripHtml } from "../purify";
-import { EventOrder } from "../db/Event/FindMsgEventEntity";
+
 import { OrderByDirection } from "../db/db-accessor-class-base";
+import { EventOrder } from "../db/Event/FindMsgEventEntity";
+import { IFindMsgEvent } from "../db/Event/IFindMsgEvent";
 import { IFindMsgAttendee } from "../db/Attendee/IFindMsgAttendee";
-import { Button, Chip, Tooltip, Typography, withStyles } from "@material-ui/core";
 
-
+/**
+ * ヘッダのクリックでソートする際のメソッドタイプ
+ * ※ソート項目がテーブル固有とするため、検索結果のコンポーネントごとに定義する必要があります。
+ */
 declare type sortFn = (order: EventOrder, dir: OrderByDirection,) => void;
 
-
+/**
+ * イベント検索結果コンポーネント用のプロパティ
+ */
 export interface IEventTableProps {
     events: IFindMsgEvent[];
     order: EventOrder;
@@ -31,6 +35,10 @@ export interface IEventTableProps {
     unknownUserDisplayName: string;
 }
 
+/**
+ * クリックによりソート可能なヘッダコンポーネント用のプロパティ
+ * ※ソート項目がテーブル固有のため共通化できそうでできません。
+ */
 interface ISortableHeaderProps {
     title: string;
     type: EventOrder,
@@ -40,7 +48,9 @@ interface ISortableHeaderProps {
     sort: sortFn;
 }
 
-
+/**
+ * この検索結果コンポーネントで使用するロケール依存リソース
+ */
 export interface IEventTableTranslation {
     subject: string;
     organizer: string;
@@ -50,22 +60,37 @@ export interface IEventTableTranslation {
     body: string;
     allday: string;
     notitle: string;
+    noattendee: string;
 }
 
-
+/**
+ * クリック可能コンポーネントスタイルでマウスポインタの形状を設定
+ */
 const clickableStyle: ComponentSlotStyle = {
     cursor: "pointer",
 };
 
+/**
+ * 行コンポーネントスタイルで行数なしの場合の表示スタイルを設定
+ */
 const emptyStyle: ComponentSlotStyle = {
     'justify-content': 'center',
 };
 
-
+/**
+ * 「行なし」行コンポーネント
+ */
 const emptyRows: ShorthandCollection<TableRowProps> = [{ key: 'empty', children: <div>No events to display</div>, styles: emptyStyle }];
+
+/**
+ * 「loading」行コンポーネント
+ */
 const loadingRows: ShorthandCollection<TableRowProps> = [{ key: 'loading', children: <Loader />, styles: emptyStyle }];
 
-
+/**
+ * クリックでソート可能なヘッダコンポーネント
+ * @param param0 
+ */
 const SortableHeader: (props: ISortableHeaderProps) => TableCellProps = ({ title, type, order, dir, defaultDir, sort }: ISortableHeaderProps) => {
     let fn: () => void;
     let indicator: JSX.Element | null;
@@ -91,36 +116,8 @@ const SortableHeader: (props: ISortableHeaderProps) => TableCellProps = ({ title
     };
 };
 
-
-interface EventContentProps {
-    body: string;
-    type: "text" | "html";
-    filter: string;
-}
-
-
-const EventContent: React.FunctionComponent<EventContentProps> = ({ type, body, filter }: EventContentProps) => {
-    const el = React.useRef<HTMLSpanElement>(null);
-    React.useEffect(() => {
-        if (!el.current) return;
-        empty(el.current);
-        const c = document.createElement("span");
-        if (type === "text") {
-            c.textContent = body;
-        } else {
-            // there is no more html, but still entities like &nbsp;
-            c.innerHTML = stripHtml(body);
-        }
-        const hasHighlight = highlightNode(c, [filter, ""]);
-        if (body.length > 30 && hasHighlight) collapse(c, 20, 6);
-        el.current.appendChild(c);
-    }, [type, body, filter]);
-    return <span ref={el} />
-}
-
-
 /**
- * Table of messages
+ * イベント検索結果表示コンポーネント
  * @param props
  */
 export const EventTable: React.FunctionComponent<IEventTableProps> = ({ translation, events, order, dir, loading, sort, dateFormat, dateTimeFormat, filter, unknownUserDisplayName }: IEventTableProps) => {
@@ -130,7 +127,9 @@ export const EventTable: React.FunctionComponent<IEventTableProps> = ({ translat
     if (events.length === 0) {
         rows = loading ? loadingRows : emptyRows;
     } else {
+        /** 日時に書式を設定 */
         const m2dt: (m: Date) => string = m => format(m, dateTimeFormat);
+        /** 件名を生成（件名の設定がない場合に「（件名なし）」を表示） */
         const title: (s: string | null, n: string) => string = (s, n) => {
             let res = s?? "";
             if (res == "") {
@@ -138,6 +137,7 @@ export const EventTable: React.FunctionComponent<IEventTableProps> = ({ translat
             }
             return res;
         };
+        /** 開始日時を生成（通常は「開始～終了」、終日イベントの場合は「開始（終日）」を表示 */
         const stContent: (s: Date, e: Date, a: boolean) => string = (s, e, a) => {
             let res: string = m2dt(s) + " ~ " + m2dt(e);
             if (a) {
@@ -145,62 +145,40 @@ export const EventTable: React.FunctionComponent<IEventTableProps> = ({ translat
             }
             return res;
         };
-
-        const HtmlTooltip = withStyles((theme) => ({
-            tooltip: {
-                backgroundColor: '#f5f5f9',
-                color: 'rgba(0, 0, 0, 0.87)',
-                maxWidth: 800,
-                fontSize: theme.typography.pxToRem(12),
-                border: '1px solid #dadde9',
-            },
-        }))(Tooltip);
-        
-        const ChipsArray: (a: IFindMsgAttendee[]) => JSX.Element = (a) => {
-            const chipData: Array<JSX.Element> = [];
-            a.forEach(rec => {
-                if (rec.name) {
-                    chipData.push(<Chip label={rec.name}/>)
-                }
-            });
-            return (
-                <div  className="attendeeTooltip">
-                    {chipData}
-                </div>
-            );
-        };
-        
-        const organizerWithAttendeeTooltip : (n: string | null, m: string | null, u:string, a: IFindMsgAttendee[]) => JSX.Element = (n, m, u, a) => {
-            const organazer = n?? m?? u;
+        /** 参加者Tooltipを生成 */
+        const organizerWithAttendeeTooltip : (name: string | null, mail: string | null, unknown:string, attendees: IFindMsgAttendee[])
+         => JSX.Element = (name, mail, unknown, attendees) => {
+            const organizer = name?? mail?? unknown;
+            const names = attendees.map(rec => (rec.name));
+            const nodata = translation.noattendee;
             return (
               <div>
                 <HtmlTooltip
                   title={
                     <React.Fragment>
                       <Typography color="inherit">{translation.attendees}</Typography>
-                      {ChipsArray(a)}
+                      {ChipsArray({names, nodata})}
                     </React.Fragment>
                   }
                 >
-                  <Button>{organazer}</Button>
+                  <Button>{organizer}</Button>
                 </HtmlTooltip>
               </div>
             );
         };
-
+        /** deeplinkのジャンプ先を生成 */
         const deeplink : (eventId: string) => string = (eventId) => {
             const link = `https://teams.microsoft.com/_#/scheduling-form/?eventId=${eventId}&opener=1&providerType=0`;
-            log.info(`deeplink url: [${link}]`);
             return link;
         };
 
-        const EventTableRow: (msg: IFindMsgEvent) => TableRowProps = ({ id, subject, organizerName, organizerMail, attendees, start, end, isAllDay, body, type, webLink }) => ({
+        const EventTableRow: (event: IFindMsgEvent) => TableRowProps = ({ id, subject, organizerName, organizerMail, attendees, start, end, isAllDay, body, type, webLink }) => ({
             key: id,
             items: [
-                { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(deeplink(id)), log.info)} disabled={!webLink}><EventContent body={title(subject, notitle)} type="text" filter={filter} /></Link> },
+                { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(deeplink(id)), log.info)} disabled={!webLink}><ContentElement body={title(subject, notitle)} type="text" filter={filter} /></Link> },
                 { key: 'o', truncateContent: true, content: organizerWithAttendeeTooltip(organizerName, organizerMail, unknownUserDisplayName, attendees) },
                 { key: 't', truncateContent: false, content: stContent(start, end, isAllDay) },
-                { key: 'c', truncateContent: true, content: <EventContent body={body} type={type} filter={filter} /> }
+                { key: 'c', truncateContent: true, content: <ContentElement body={body} type={type} filter={filter} /> }
             ],
         });
 
