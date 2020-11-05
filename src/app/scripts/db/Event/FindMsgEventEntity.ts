@@ -30,7 +30,9 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
 
     lastSyncedKey = "FindMsg_events_last_synced";
 
-    isDeltaSyncAvailable = true;
+    // デルタクエリは開始日と終了日の範囲指定でイベントを抽出してくれるだけなので
+    // 削除されたイベントを掃除することができない＝＞デルタはサポートしないことにする
+    isDeltaSyncAvailable = false;
     
     parseApi = async (api: A): Promise<T | null> => {
         let res: IFindMsgEvent | null = null;
