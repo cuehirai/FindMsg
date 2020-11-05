@@ -7,23 +7,33 @@ import { DbAccessorBaseComponent, ISubEntityFunctionArg, ISyncFunctionArg, Order
 import { IFindMsgEvent } from "./IFindMsgEvent";
 import { IFindMsgEventDb } from "./IFindMsgEventDb";
 import * as log from '../../logger';
-import { collapseWhitespace, sanitize, stripHtml } from '../../purify';
+import { collapseConsecutiveChar, collapseWhitespace, sanitize, stripHtml } from '../../purify';
 import { IFindMsgAttendee } from '../Attendee/IFindMsgAttendee';
 import { getAllPages } from '../../graph/getAllPages';
 import { AI } from '../../appInsights';
 
+/**
+ * このテーブルがサポートするソートキー
+ * ※テーブルに定義したインデックスと一致していること
+ */
 export enum EventOrder {
     organizer = "organizer",
     start = "start",
     subject = "subject",
 }
 
+/**
+ * ソートキーからテーブルのインデックス名に変換するためのマップ
+ */
 const order2IdxMap = {
     organizer: idx.events.organizer$start$subject,
     start: idx.events.start$subject,
     subject: idx.events.subject,
 }
 
+/**
+ * イベント（スケジュール）エンティティ管理クラス
+ */
 class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends Event> extends DbAccessorBaseComponent<D, T, A> {
     
     tableName = "events";
@@ -51,11 +61,11 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
             return null;
         }
         if (!createdDateTime) {
-            log.error("Ignoring event without createdDateTime:", api);
+            log.warn("Ignoring event without createdDateTime:", api);
             return null;
         }
         if (!start || !start.dateTime || !end || !end.dateTime) {
-            log.error("Ignoring event without start/end:", api);
+            log.warn("Ignoring event without start/end:", api);
             return null;
         }
 
@@ -78,7 +88,7 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
                 text = collapseWhitespace((api.subject ?? "") + " " + body).toLowerCase();
             } else if (api.body.contentType === "html") {
                 type = "html";
-                body = sanitize(api.body.content ?? "");
+                body = collapseConsecutiveChar(sanitize(api.body.content ?? ""), "_", 3);
                 text = collapseWhitespace((api.subject ?? "") + " " + stripHtml(body)).toLowerCase();
             } else {
                 type = "text";

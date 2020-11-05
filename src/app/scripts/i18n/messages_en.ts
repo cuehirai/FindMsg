@@ -177,5 +177,6 @@ export const messages: IMessageTranslation = {
         body: "body",
         allday: "(all day)",
         notitle: "(no title)",
+        noattendee: "(none)",
         },
 }

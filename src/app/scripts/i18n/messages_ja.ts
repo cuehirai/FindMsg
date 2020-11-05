@@ -177,5 +177,6 @@ export const messages: IMessageTranslation = {
         body: "本文",
         allday: "(終日)",
         notitle: "(件名なし)",
+        noattendee: "(なし)",
         },
 }

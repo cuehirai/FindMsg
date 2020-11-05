@@ -29,6 +29,7 @@ export const loadMoreCount = 25;
 /** 日付範囲指定種類用の列挙体 */
 export enum DateRange { AllTime, PastWeek, PastMonth, PastYear, Custom }
 
+/** 日付範囲指定コンポーネント用プロパティ */
 export interface DateRangeRadioGroupItemProps extends RadioGroupItemProps {
     value: DateRange;
 }
@@ -47,7 +48,7 @@ export interface ITeamsInfo {
     channelOptions: DropdownItemPropsKey[][];
 }
 
-/** クラス固有のステータス（これを継承してクラス固有ステータスを管理してください） */
+/** クラス固有のステータス（これを継承してクラス固有ステータスを管理してください。通常は検索結果などを含めます。） */
 export interface IMyOwnState {
     initialized: boolean;
 }
@@ -199,9 +200,8 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
 
     /**
      * ページタイトルを指定してください。
-     * @param locale 
      */
-    protected abstract GetPageTitle(locale: string): string;
+    protected abstract GetPageTitle(): string;
 
     /**
      * コンストラクタから呼び出します。
@@ -396,8 +396,6 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         const channelName = context?.channelName ?? "";
         const translation = strings.get(locale);
 
-        document.title = this.GetPageTitle(locale? locale : "");
-
         microsoftTeams.setFrameContext({
             contentUrl: location.href,
             websiteUrl: location.href,
@@ -492,6 +490,9 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             translation: translation,
             me: this.setMyState(),
         }, this.setStateCallBack);
+
+        document.title = this.GetPageTitle();
+
         log.info(`▲▲▲ initBaseInfo END ▲▲▲`);
     }
 

@@ -6,17 +6,18 @@ import { Button, Dropdown, Flex, Input, Segment, Text } from "../ui";
 import { cancellation, OperationCancelled } from "../utils";
 import { AI } from "../appInsights";
 import { EventTable } from "./EventTable";
-import * as strings from '../i18n/messages';
 import { EventOrder, FindMsgEvent } from "../db/Event/FindMsgEventEntity";
 import { ISyncFunctionArg, OrderByDirection } from "../db/db-accessor-class-base";
 import { IFindMsgEvent } from "../db/Event/IFindMsgEvent";
 
+/** スケジュール検索用ロケール依存リソース定義 */
 export interface IFindMsgScheduleTranslation {
     pageTitle: string;
     filterByStart: string;
     filterByOrganizer: string;
 }
 
+/** 検索結果情報 */
 interface ISearchResult {
     events: IFindMsgEvent[];
     hasMore: boolean;
@@ -24,19 +25,21 @@ interface ISearchResult {
     dir: OrderByDirection;
 }
 
+/** クラス固有のステートプロパティ */
 interface IFindMsgSearchScheduleState extends IMyOwnState {
     searchResult: ISearchResult;
 }
 
+/**
+ * スケジュール検索コンポーネント
+ */
 export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
     protected isTeamAndChannelComboIncluded = false;
 
     protected isUsingStorage = true;
 
-    protected GetPageTitle(locale: string): string {
-        const translation = strings.get(locale);
-        const res = translation.schedule.pageTitle;
-        return res;
+    protected GetPageTitle(): string {
+        return this.state.translation.schedule.pageTitle;
     }
     
     protected startSync = async():Promise<void> => {
@@ -236,28 +239,6 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
         log.info(`▲▲▲ renderContentBottom END ▲▲▲`);
         return res;
     }
-
-    // protected setStateCallBack = async (): Promise<void> => {
-    //     this.getUserOptions();
-    //     this.getEvents();
-    // };
-    
-    // protected onFilterChangedCallBack = async (): Promise<void> => {
-    //     const { order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
-    //     this.getEvents(order, dir);
-    // }
-
-    // protected onSearchUserChangedCallBack = async (): Promise<void> => {
-    //     const { order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
-    //     this.getEvents(order, dir);
-    // }
-    // protected onTeamOrChannelChangedCallBack = async (): Promise<void> => {
-    //     //実装なし
-    // }
-    // protected onDateRangeChangedCallBack = async (): Promise<void> => {
-    //     const { order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
-    //     this.getEvents(order, dir);
-    // }
 
     protected setStateCallBack(): void {
         this.getUserOptions();
