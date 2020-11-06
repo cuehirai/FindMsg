@@ -23,6 +23,7 @@ export const messages: IMessageTranslation = {
         loadMore: "Load more",
         allTeams: "(All Teams)",
         allChannels: "(All Channels)",
+        teamchannel: (teamname, channelname) => `team: ${teamname} / channel: ${channelname}`,
         from: "between",
         to: "and",
         messagesFound: (shown, total) => `${total} ${total === 1 ? "message" : "messages"} found ${total === shown ? "" : `- ${shown} displayed.`}`,

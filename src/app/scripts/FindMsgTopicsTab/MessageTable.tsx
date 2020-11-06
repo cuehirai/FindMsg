@@ -9,6 +9,8 @@ import { info } from '../logger'
 import { fixMessageLink } from "../utils";
 import { highlightNode, collapse, empty } from "../highlight";
 import { stripHtml } from "../purify";
+import { HtmlTooltip, IChannelInfo } from "../ui-jsx";
+import { Typography } from "@material-ui/core";
 
 
 declare type sortFn = (order: MessageOrder, dir: Direction,) => void;
@@ -24,6 +26,8 @@ export interface IMessageTableProps {
     dateFormat: string;
     filter: string;
     unknownUserDisplayName: string;
+    channelMap: Map<string, IChannelInfo>;
+    teamchannel: (teamname: string, channelname: string) => string;
 }
 
 
@@ -90,6 +94,13 @@ interface MessageContentProps {
     filter: string;
 }
 
+interface ITeamChannelTooltipArg {
+    authorName: string;
+    unknownUserDisplayName: string;
+    channelId: string;
+    channelMap: Map<string, IChannelInfo>;
+    teamchannel: (teamname: string, channelname: string) => string;
+}
 
 const MessageContent: React.FunctionComponent<MessageContentProps> = ({ type, body, filter }: MessageContentProps) => {
     const el = React.useRef<HTMLSpanElement>(null);
@@ -115,18 +126,19 @@ const MessageContent: React.FunctionComponent<MessageContentProps> = ({ type, bo
  * Table of messages
  * @param props
  */
-export const MessageTable: React.FunctionComponent<IMessageTableProps> = ({ t, messages, order, dir, loading, sort, dateFormat, filter, unknownUserDisplayName }: IMessageTableProps) => {
+export const MessageTable: React.FunctionComponent<IMessageTableProps> = ({ t, messages, order, dir, loading, sort, dateFormat, filter, unknownUserDisplayName, channelMap, teamchannel }: IMessageTableProps) => {
     let rows: ShorthandCollection<TableRowProps>;
 
     if (messages.length === 0) {
         rows = loading ? loadingRows : emptyRows;
     } else {
         const m2dt: (m: Date) => string = m => format(m, dateFormat);
-        const MessageTableRow: (msg: IFindMsgChannelMessage) => TableRowProps = ({ id, subject, authorName, created, modified, body, type, url }) => ({
+        const MessageTableRow: (msg: IFindMsgChannelMessage) => TableRowProps = ({ id, subject, authorName, created, modified, body, type, url, channelId }) => ({
             key: id,
             items: [
                 { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(url), info)} disabled={!url}><MessageContent body={subject ?? ""} type="text" filter={filter} /></Link> },
-                { key: 'a', truncateContent: true, content: authorName || unknownUserDisplayName },
+                // { key: 'a', truncateContent: true, content: authorName || unknownUserDisplayName },
+                { key: 'a', truncateContent: true, content: teamchannelTooltip({authorName, unknownUserDisplayName, channelId, channelMap, teamchannel}) },
                 { key: 't', truncateContent: false, content: m2dt(isValid(modified) ? modified : created) },
                 { key: 'c', truncateContent: true, content: <MessageContent body={body} type={type} filter={filter} /> }
             ],
@@ -148,4 +160,22 @@ export const MessageTable: React.FunctionComponent<IMessageTableProps> = ({ t, m
     return <Table className="messageTable" header={header} rows={rows} />;
 };
 
-
+const teamchannelTooltip = (params:ITeamChannelTooltipArg): JSX.Element => {
+    const channelInfo = params.channelMap.get(params.channelId);
+    const name = channelInfo? params.teamchannel(channelInfo.teamDisplayName, channelInfo.channelDisplayName) : null;
+    if (name) {
+        return (
+            <HtmlTooltip
+                title={
+                    <React.Fragment>
+                    <Typography color="inherit">{name}</Typography>
+                    </React.Fragment>
+                }
+            >
+                <div>{params.authorName || params.unknownUserDisplayName}</div>
+            </HtmlTooltip>
+        );
+    } else {
+        return (<div>{params.authorName || params.unknownUserDisplayName}</div>);
+    }
+}

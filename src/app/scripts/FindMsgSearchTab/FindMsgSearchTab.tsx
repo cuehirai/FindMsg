@@ -21,6 +21,7 @@ import { StoragePermissionIndicator } from "../StoragePermissionIndicator";
 import { AI } from '../appInsights';
 import { getTopLevelMessagesLastSynced } from "../db/Sync";
 import { ICommonMessage } from "../i18n/ICommonMessage";
+import { getChannelMap, IChannelInfo } from "../ui-jsx";
 
 
 export declare type MyTeam = IFindMsgTeam & { channels: IFindMsgChannel[] };
@@ -85,6 +86,8 @@ export interface IFindMsgSearchTabState extends ITeamsBaseComponentState, ITeamC
 
     teamsInfo: ITeamsInfo;
     t: IMessageTranslation;
+
+    channelMap: Map<string, IChannelInfo>;
 }
 
 
@@ -184,6 +187,8 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
 
             t: strings.get(this.getQueryVariable("l")),
             theme: this.getTheme(this.getQueryVariable("theme")),
+
+            channelMap: new Map<string, IChannelInfo>(),
         }
 
         this.msGraphClient = Client.init({ authProvider: this.authProvider });
@@ -409,6 +414,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                     cancel,
                     from, to,
                     messagesFound,
+                    teamchannel,
                 },
                 search: {
                     header,
@@ -445,6 +451,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
             loginRequired,
             error,
             warning,
+            channelMap,
         } = this.state;
 
         return (
@@ -540,7 +547,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                     </Segment>
 
                     <Divider />
-                    <SearchResultView filter={filter} countFormat={messagesFound} m2dt={this.formatDate} messages={searchResults} searchTerm={searchTerm} showCollapsed={showCollapsed} showExpanded={showExpanded} unknownUserDisplayName={unknownUserDisplayName} />
+                    <SearchResultView filter={filter} countFormat={messagesFound} m2dt={this.formatDate} messages={searchResults} searchTerm={searchTerm} showCollapsed={showCollapsed} showExpanded={showExpanded} unknownUserDisplayName={unknownUserDisplayName} channelMap={channelMap} teamchannel={teamchannel} />
 
                     <div style={{ flex: 1 }} />
                     <Divider />
@@ -766,8 +773,9 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
             const users = await userCache.getKnownUsers();
             const searchUserOptions = users.map(({ id, displayName }) => ({ key: id, header: displayName || unknownUserDisplayName }));
 
+            const channelMap = await getChannelMap();
             // this.setState({ teams, checkState: cs, searchUserOptions });
-            this.setState({ teams, searchUserOptions });
+            this.setState({ teams, searchUserOptions, channelMap });
         }
         catch (error) {
             AI.trackException({ exception: error });

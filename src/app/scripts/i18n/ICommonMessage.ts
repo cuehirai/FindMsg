@@ -9,6 +9,8 @@ export interface ICommonMessage {
     allTeams: string;
     /** （全チャネル） */
     allChannels: string;
+    /** チーム名とチャネル名 */
+    teamchannel: (teamname: string, channelname: string) => string;
 
     /** から */
     from: string;

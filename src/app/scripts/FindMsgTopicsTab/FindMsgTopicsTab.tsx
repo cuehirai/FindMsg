@@ -17,6 +17,7 @@ import * as strings from '../i18n/messages';
 import { IMessageTranslation } from "../i18n/IMessageTranslation";
 import { AI } from '../appInsights';
 import { getTopLevelMessagesLastSynced } from "../db/Sync";
+import { getChannelMap, IChannelInfo } from "../ui-jsx";
 
 
 declare type DropdownItemPropsKey = DropdownItemProps & { key: string };
@@ -51,6 +52,8 @@ export interface IFindMsgTopicsTabState extends ITeamsBaseComponentState, SyncSt
     loginRequired: boolean;
 
     t: IMessageTranslation;
+
+    channelMap: Map<string, IChannelInfo>;
 }
 
 
@@ -134,6 +137,8 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
 
             t: strings.get(l),
             theme: this.getTheme(this.getQueryVariable("theme")),
+
+            channelMap: new Map<string, IChannelInfo>(),
         }
         this.msGraphClient = Client.init({ authProvider: this.authProvider });
     }
@@ -170,6 +175,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
         const teamName = context?.teamName ?? "";
         const channelName = context?.channelName ?? "";
         const t = strings.get(locale);
+        const channelMap = await getChannelMap();
 
         document.title = t.topics.pageTitle;
 
@@ -265,6 +271,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             lastSynced,
             loginRequired: !haveUserInfo(loginHint),
             t,
+            channelMap,
         }, this.getMessages);
     }
 
@@ -350,7 +357,8 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
                 dateTimeFormat, common, sync,
                 table, footer, auth, filter,
                 unknownUserDisplayName,
-            }
+            },
+            channelMap,
         } = this.state;
 
         return (
@@ -426,7 +434,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
                         onVisibleChange={this.warningVisibilityChanged}
                     />}
 
-                    <MessageTable t={table} dateFormat={dateTimeFormat} messages={messages} dir={dir} order={order} sort={this.getMessages} loading={loading} filter={filterString} unknownUserDisplayName={unknownUserDisplayName} />
+                    <MessageTable t={table} dateFormat={dateTimeFormat} messages={messages} dir={dir} order={order} sort={this.getMessages} loading={loading} filter={filterString} unknownUserDisplayName={unknownUserDisplayName} channelMap={channelMap} teamchannel={common.teamchannel} />
 
                     {hasMore && <Button onClick={this.loadMoreMessages} content={common.loadMore} />}
 
