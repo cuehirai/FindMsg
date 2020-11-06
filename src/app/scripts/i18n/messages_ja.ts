@@ -23,6 +23,7 @@ export const messages: IMessageTranslation = {
         loadMore: "続きを表示",
         allTeams: "（全チーム）",
         allChannels: "（全チャネル）",
+        teamchannel: (teamname, channelname) => `チーム: ${teamname} / チャネル: ${channelname}`,
         from: "から",
         to: "まで",
         messagesFound: (shown, total) => `検索結果: ${total} 件` + (shown === total ? "" : `(${shown}件表示中)`),

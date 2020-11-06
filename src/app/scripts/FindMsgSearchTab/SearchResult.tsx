@@ -10,6 +10,8 @@ import { isValid } from "../dateUtils";
 import { info } from '../logger';
 import { fixMessageLink } from "../utils";
 import { collapseWhitespace } from '../purify';
+import { HtmlTooltip, IChannelInfo } from "../ui-jsx";
+import { Typography } from "@material-ui/core";
 
 
 export interface SearchResultViewProps {
@@ -21,6 +23,8 @@ export interface SearchResultViewProps {
     showCollapsed: string;
     showExpanded: string;
     unknownUserDisplayName: string;
+    channelMap: Map<string, IChannelInfo>;
+    teamchannel: (teamname: string, channelname: string) => string;
 }
 
 interface SearchResultProps {
@@ -30,6 +34,8 @@ interface SearchResultProps {
     showCollapsed: string;
     showExpanded: string;
     unknownUserDisplayName: string;
+    channelMap: Map<string, IChannelInfo>;
+    teamchannel: (teamname: string, channelname: string) => string;
 }
 
 interface SearchResultState {
@@ -42,6 +48,16 @@ interface SearchResultState {
     collapsedContent: Node | null;
 }
 
+interface ITeamChannelTooltipArg {
+    channelId: string;
+    edited: boolean;
+    modified: Date;
+    created: Date;
+    url: string;
+    m2dt: (date: Date) => string;
+    channelMap: Map<string, IChannelInfo>;
+    teamchannel: (teamname: string, channelname: string) => string;
+}
 
 const margin = mergeStyles({
     "margin-bottom": "16px"
@@ -145,7 +161,7 @@ class SearchResult extends React.Component<SearchResultProps, SearchResultState>
 
 
     render() {
-        const { m2dt, showCollapsed, showExpanded, unknownUserDisplayName, message: { authorName, subject, created, modified, url } } = this.props;
+        const { m2dt, showCollapsed, showExpanded, unknownUserDisplayName, channelMap, teamchannel, message: { authorName, subject, created, modified, url, channelId } } = this.props;
         const { collapsed, collapsible, subjectHtml } = this.state;
         const edited = isValid(modified);
 
@@ -161,9 +177,10 @@ class SearchResult extends React.Component<SearchResultProps, SearchResultState>
                     <Flex column gap="gap.small">
                         <Flex gap="gap.medium" vAlign="center">
                             <Text content={authorName || unknownUserDisplayName} size="small" weight="bold" />
-                            <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(url), info)} disabled={!url}>
+                            {/* <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(url), info)} disabled={!url}>
                                 <Text timestamp content={m2dt(edited ? modified : created)} size="small" />
-                            </Link>
+                            </Link> */}
+                            {this.teamchannelTooltip({channelId, edited, modified, created, url, m2dt, channelMap, teamchannel})}
                             {edited && <Text content="Edited" size="small" />}
                         </Flex>
                         {subject && (subjectHtml ? <Text dangerouslySetInnerHTML={subjectHtml} size="large" weight="bold" /> : <Text content={subject} size="large" weight="bold" />)}
@@ -176,6 +193,32 @@ class SearchResult extends React.Component<SearchResultProps, SearchResultState>
             </Card>
         );
     }
+
+    private teamchannelTooltip(params:ITeamChannelTooltipArg): JSX.Element {
+        const channelInfo = params.channelMap.get(params.channelId);
+        const name = channelInfo? params.teamchannel(channelInfo.teamDisplayName, channelInfo.channelDisplayName) : null;
+        const link: JSX.Element = (
+            <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(params.url), info)} disabled={!params.url}>
+                <Text timestamp content={params.m2dt(params.edited ? params.modified : params.created)} size="small" />
+            </Link>
+        );
+
+        if (name) {
+            return (
+                <HtmlTooltip
+                    title={
+                        <React.Fragment>
+                        <Typography color="inherit">{name}</Typography>
+                        </React.Fragment>
+                    }
+                >
+                    {link}
+                </HtmlTooltip>
+            );
+        } else {
+            return link;
+        }
+    }
 }
 
 
@@ -184,7 +227,7 @@ class SearchResult extends React.Component<SearchResultProps, SearchResultState>
  * @param props
  */
 export function SearchResultView(props: SearchResultViewProps): JSX.Element | null {
-    const { filter, messages, countFormat, m2dt, searchTerm, showCollapsed, showExpanded, unknownUserDisplayName } = props;
+    const { filter, messages, countFormat, m2dt, searchTerm, showCollapsed, showExpanded, unknownUserDisplayName, channelMap, teamchannel } = props;
 
     if (!messages || messages.length === 0) return null;
 
@@ -196,7 +239,7 @@ export function SearchResultView(props: SearchResultViewProps): JSX.Element | nu
     /* Important caveat: renderCell is NOT a react function component, but a plain function that returns ReactNode. That means, hooks can not be used. */
     const renderCell = (item?: IFindMsgChannelMessage | undefined, index?: number): React.ReactNode => {
         //info("Render list item " + index);
-        return item && <SearchResult key={index} message={item} m2dt={m2dt} highlight={terms} showCollapsed={showCollapsed} showExpanded={showExpanded} unknownUserDisplayName={unknownUserDisplayName} />;
+        return item && <SearchResult key={index} message={item} m2dt={m2dt} highlight={terms} showCollapsed={showCollapsed} showExpanded={showExpanded} unknownUserDisplayName={unknownUserDisplayName} channelMap={channelMap} teamchannel={teamchannel} />;
     };
 
     React.useEffect(() => setItems(filterKey ? props.messages.filter(FindMsgChannelMessage.createFilter(filterKey)) : props.messages), [props.messages, filterKey]);

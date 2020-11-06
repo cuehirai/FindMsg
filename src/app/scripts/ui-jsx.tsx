@@ -2,6 +2,7 @@ import React from "react";
 import { Chip, Tooltip, withStyles } from "@material-ui/core";
 import { highlightNode, collapse, empty } from "./highlight";
 import { stripHtml } from "./purify";
+import { FindMsgChannel, FindMsgTeam } from "./db";
 
 /**
  * コンテンツコンポーネント用プロパティ
@@ -12,9 +13,18 @@ export interface ContentElementProps {
     filter: string;
 }
 
+/** ChipsArray生成時の引数用プロパティ */
 export interface IChipsArrayProp {
     names: (string | null)[];
     nodata: string;
+}
+
+/** チャネルIDから遡ってチャネル名、チーム名を取得するマップ用レコード */
+export interface IChannelInfo {
+    channelId: string;
+    teamId: string;
+    channelDisplayName: string;
+    teamDisplayName: string;
 }
 
 /**
@@ -79,3 +89,22 @@ export const HtmlTooltip = withStyles((theme) => ({
         border: '1px solid #dadde9',
     },
 }))(Tooltip)
+
+/** チャネルIDをキーとしてチャネル名やチーム名を取得できるMAPを生成します（UIでもJSXでもないですが・・） */
+export const getChannelMap = async (): Promise<Map<string, IChannelInfo>> => {
+    const channelMap = new Map<string, IChannelInfo>();
+    const channels = await FindMsgChannel.getAll();
+    channels.forEach(async rec => {
+        const team = await FindMsgTeam.get(rec.teamId);
+        if (team) {
+            const channelInfo: IChannelInfo = {
+                channelId: rec.id,
+                teamId: team.id,
+                channelDisplayName: rec.displayName,
+                teamDisplayName: team.displayName,
+            };
+            channelMap.set(rec.id, channelInfo);
+        }
+    })
+    return channelMap;
+}
