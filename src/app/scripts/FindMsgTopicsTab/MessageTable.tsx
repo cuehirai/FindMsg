@@ -7,9 +7,9 @@ import * as msTeams from '@microsoft/teams-js';
 import { format, isValid } from "../dateUtils";
 import { info } from '../logger'
 import { fixMessageLink } from "../utils";
-import { highlightNode, collapse, empty } from "../highlight";
-import { stripHtml } from "../purify";
-import { HtmlTooltip, IChannelInfo } from "../ui-jsx";
+// import { highlightNode, collapse, empty } from "../highlight";
+// import { stripHtml } from "../purify";
+import { ContentElement, HtmlTooltip, IChannelInfo } from "../ui-jsx";
 import { Typography } from "@material-ui/core";
 
 
@@ -88,11 +88,11 @@ const SortableHeader: (props: ISortableHeaderProps) => TableCellProps = ({ title
 };
 
 
-interface MessageContentProps {
-    body: string;
-    type: "text" | "html";
-    filter: string;
-}
+// interface MessageContentProps {
+//     body: string;
+//     type: "text" | "html";
+//     filter: string;
+// }
 
 interface ITeamChannelTooltipArg {
     authorName: string;
@@ -102,24 +102,24 @@ interface ITeamChannelTooltipArg {
     teamchannel: (teamname: string, channelname: string) => string;
 }
 
-const MessageContent: React.FunctionComponent<MessageContentProps> = ({ type, body, filter }: MessageContentProps) => {
-    const el = React.useRef<HTMLSpanElement>(null);
-    React.useEffect(() => {
-        if (!el.current) return;
-        empty(el.current);
-        const c = document.createElement("span");
-        if (type === "text") {
-            c.textContent = body;
-        } else {
-            // there is no more html, but still entities like &nbsp;
-            c.innerHTML = stripHtml(body);
-        }
-        const hasHighlight = highlightNode(c, [filter, ""]);
-        if (body.length > 30 && hasHighlight) collapse(c, 20, 6);
-        el.current.appendChild(c);
-    }, [type, body, filter]);
-    return <span ref={el} />
-}
+// const MessageContent: React.FunctionComponent<MessageContentProps> = ({ type, body, filter }: MessageContentProps) => {
+//     const el = React.useRef<HTMLSpanElement>(null);
+//     React.useEffect(() => {
+//         if (!el.current) return;
+//         empty(el.current);
+//         const c = document.createElement("span");
+//         if (type === "text") {
+//             c.textContent = body;
+//         } else {
+//             // there is no more html, but still entities like &nbsp;
+//             c.innerHTML = stripHtml(body);
+//         }
+//         const hasHighlight = highlightNode(c, [filter, ""]);
+//         if (body.length > 30 && hasHighlight) collapse(c, 20, 6);
+//         el.current.appendChild(c);
+//     }, [type, body, filter]);
+//     return <span ref={el} />
+// }
 
 
 /**
@@ -136,11 +136,11 @@ export const MessageTable: React.FunctionComponent<IMessageTableProps> = ({ t, m
         const MessageTableRow: (msg: IFindMsgChannelMessage) => TableRowProps = ({ id, subject, authorName, created, modified, body, type, url, channelId }) => ({
             key: id,
             items: [
-                { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(url), info)} disabled={!url}><MessageContent body={subject ?? ""} type="text" filter={filter} /></Link> },
+                { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(url), info)} disabled={!url}><ContentElement body={subject ?? ""} type="text" filter={filter} /></Link> },
                 // { key: 'a', truncateContent: true, content: authorName || unknownUserDisplayName },
                 { key: 'a', truncateContent: true, content: teamchannelTooltip({authorName, unknownUserDisplayName, channelId, channelMap, teamchannel}) },
                 { key: 't', truncateContent: false, content: m2dt(isValid(modified) ? modified : created) },
-                { key: 'c', truncateContent: true, content: <MessageContent body={body} type={type} filter={filter} /> }
+                { key: 'c', truncateContent: true, content: <ContentElement body={body} type={type} filter={filter} tooltip={true} /> }
             ],
         });
 

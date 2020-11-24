@@ -9,7 +9,10 @@ export * from "./FindMsgTopicsTab/FindMsgTopicsTabRemove";
 export * from "./FindMsgSearchTab/FindMsgSearchTab";
 // Automatically added for the FindMsgSearchChat tab
 export * from "./FindMsgSearchChat/FindMsgSearchChat";
+// Automatically added for the FindMsgSearchSchedule tab
 export * from "./FindMsgSearchSchedule/FindMsgSearchSchedule";
+// Automatically added for the about page
+export * from "./about/FindMsgIndex";
 
 // only for (manual) debugging
 export { db } from "./db/Database";

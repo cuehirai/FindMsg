@@ -179,5 +179,9 @@ export const messages: IMessageTranslation = {
         allday: "(終日)",
         notitle: "(件名なし)",
         noattendee: "(なし)",
-        },
+    },
+    
+    about: {
+        UserPrincipalNameTitle: "マイクロソフトアカウントを入力してください"
+    },
 }

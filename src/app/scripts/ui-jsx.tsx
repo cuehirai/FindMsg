@@ -1,7 +1,7 @@
 import React from "react";
 import { Chip, Tooltip, withStyles } from "@material-ui/core";
 import { highlightNode, collapse, empty } from "./highlight";
-import { stripHtml } from "./purify";
+import { collapseConsecutiveChar, sanitize, stripHtml } from "./purify";
 import { FindMsgChannel, FindMsgTeam } from "./db";
 
 /**
@@ -11,6 +11,7 @@ export interface ContentElementProps {
     body: string;
     type: "text" | "html";
     filter: string;
+    tooltip?: boolean;
 }
 
 /** ChipsArray生成時の引数用プロパティ */
@@ -31,7 +32,7 @@ export interface IChannelInfo {
  * コンテンツコンポーネント（表示しきれない場合に「...」で省略したり検索にヒットした部分をハイライトしたい要素に使用）
  * @param param0 
  */
-export const ContentElement: React.FunctionComponent<ContentElementProps> = ({ type, body, filter }: ContentElementProps) => {
+export const ContentElement: React.FunctionComponent<ContentElementProps> = ({ type, body, filter, tooltip }: ContentElementProps) => {
     const el = React.useRef<HTMLSpanElement>(null);
     React.useEffect(() => {
         if (!el.current) return;
@@ -41,13 +42,26 @@ export const ContentElement: React.FunctionComponent<ContentElementProps> = ({ t
             c.textContent = body;
         } else {
             // there is no more html, but still entities like &nbsp;
-            c.innerHTML = stripHtml(body);
+            // c.innerHTML = stripHtml(body);
+            c.innerHTML = stripHtml(collapseConsecutiveChar(sanitize(body), "_", 3));
         }
         const hasHighlight = highlightNode(c, [filter, ""]);
         if (body.length > 30 && hasHighlight) collapse(c, 20, 6);
         el.current.appendChild(c);
-    }, [type, body, filter]);
-    return <span ref={el} />
+    }, [type, body, filter, tooltip]);
+    let res = <span ref={el} />;
+    if (tooltip?? false) {
+        res = (
+            <HtmlTooltip title={
+                <React.Fragment>
+                    <span dangerouslySetInnerHTML={{__html: body}} />
+                </React.Fragment>
+            }>
+                <span ref={el} />
+            </HtmlTooltip>
+        );
+    }
+    return res;
 }
 
 /**

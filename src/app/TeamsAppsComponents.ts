@@ -6,4 +6,7 @@ export * from "./FindMsgTopicsTab/FindMsgTopicsTab";
 export * from "./FindMsgSearchTab/FindMsgSearchTab";
 // Automatically added for the FindMsgSearchChat tab
 export * from "./FindMsgSearchChat/FindMsgSearchChat";
+// Automatically added for the FindMsgSearchSchedule tab
 export * from "./FindMsgSearchSchedule/FindMsgSearchSchedule";
+// Automatically added for the about page
+export * from "./about/FindMsgIndex";

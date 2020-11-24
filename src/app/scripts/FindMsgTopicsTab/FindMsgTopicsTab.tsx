@@ -18,6 +18,7 @@ import { IMessageTranslation } from "../i18n/IMessageTranslation";
 import { AI } from '../appInsights';
 import { getTopLevelMessagesLastSynced } from "../db/Sync";
 import { getChannelMap, IChannelInfo } from "../ui-jsx";
+import { db } from "../db/Database";
 
 
 declare type DropdownItemPropsKey = DropdownItemProps & { key: string };
@@ -184,8 +185,10 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             websiteUrl: location.href,
         });
 
+        await db.login(this.msGraphClient,loginHint);
+
         // add lastSynced for top level messages
-        const lastSynced = channelId ? await Sync.getChannelLastSynced(channelId) : getTopLevelMessagesLastSynced();
+        const lastSynced = channelId ? await Sync.getChannelLastSynced(channelId) : await getTopLevelMessagesLastSynced();
 
         let teamIdx: number;
         let channelIdx: number;
@@ -524,7 +527,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             if (groupId && channelId) {
                 syncResult = await Sync.channelTopLevelMessages(this.msGraphClient, groupId, channelId, throwfn, this.reportProgress, syncProgress);
             } else {
-                syncResult = await Sync.autoSyncAll(this.msGraphClient, false, throwfn, this.reportProgress, syncProgress);
+                syncResult = await Sync.autoSyncAll(this.msGraphClient, false, throwfn, this.reportProgress, syncProgress, true);
             }
 
             if (syncResult) {

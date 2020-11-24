@@ -21,6 +21,7 @@ import { FindMsgChatMessage } from './FindMsgChatMessage';
 import { FindMsgChatMember } from './FindMsgChatMember';
 import { IFindMsgChatMessage } from './IFindMsgChatMessage';
 import { GraphImage } from '../graphImage';
+import { IFindMsgImageDb } from './IFindMsgImageDb';
 
 /*
 Sync design notes:
@@ -113,17 +114,23 @@ This would require a rewrite of the sync logic, because currently state is not e
 
 
 const teamSyncKey = "FindMsg_teams_last_synced";
-const getTeamsLastSynced = (): Date => du.parseISO(localStorage.getItem(teamSyncKey) ?? "");
-const setTeamsLastSynced = (ts: Date) => localStorage.setItem(teamSyncKey, du.formatISO(ts));
+// const getTeamsLastSynced = (): Date => du.parseISO(localStorage.getItem(teamSyncKey) ?? "");
+// const setTeamsLastSynced = (ts: Date) => localStorage.setItem(teamSyncKey, du.formatISO(ts));
+const getTeamsLastSynced = async (): Promise<Date> => await db.getLastSync(teamSyncKey);
+const setTeamsLastSynced = async (ts: Date) => await db.storeLastSync(teamSyncKey, ts);
 
 const topLevelMessagesSyncKey = "FindMsg_toplevel_messages_last_synced";
-export const getTopLevelMessagesLastSynced = (): Date => du.parseISO(localStorage.getItem(topLevelMessagesSyncKey) ?? "");
-const setTopLevelMessagesLastSynced = (ts: Date) => localStorage.setItem(topLevelMessagesSyncKey, du.formatISO(ts));
+// export const getTopLevelMessagesLastSynced = (): Date => du.parseISO(localStorage.getItem(topLevelMessagesSyncKey) ?? "");
+// const setTopLevelMessagesLastSynced = (ts: Date) => localStorage.setItem(topLevelMessagesSyncKey, du.formatISO(ts));
+export const getTopLevelMessagesLastSynced = async (): Promise<Date> => await db.getLastSync(topLevelMessagesSyncKey);
+const setTopLevelMessagesLastSynced = async (ts: Date, doExport: boolean) => await db.storeLastSync(topLevelMessagesSyncKey, ts, doExport);
 
 // chat部
 const chatSyncKey = "FindMsg_chats_last_synced";
-const getChatsLastSynced = (): Date => du.parseISO(localStorage.getItem(chatSyncKey) ?? "");
-const setChatsLastSynced = (ts: Date) => localStorage.setItem(chatSyncKey, du.formatISO(ts));
+// const getChatsLastSynced = (): Date => du.parseISO(localStorage.getItem(chatSyncKey) ?? "");
+// const setChatsLastSynced = (ts: Date) => localStorage.setItem(chatSyncKey, du.formatISO(ts));
+const getChatsLastSynced = async (): Promise<Date> => await db.getLastSync(chatSyncKey);
+const setChatsLastSynced = async (ts: Date) => await db.storeLastSync(topLevelMessagesSyncKey, ts);
 
 export interface ISyncProgressTranslation {
     teamList: string;
@@ -156,10 +163,10 @@ export class Sync {
      * @param progress a function to accept sync progress reports
      */
     @log.traceAsync(true)
-    static async autoSyncAll(client: Client, includeReplies: boolean, checkCancel: throwFn = nop, progress: progressFn = nop, { teamList, channelList, topLevelMessages, replies }: ISyncProgressTranslation): Promise<boolean> {
+    static async autoSyncAll(client: Client, includeReplies: boolean, checkCancel: throwFn = nop, progress: progressFn = nop, { teamList, channelList, topLevelMessages, replies }: ISyncProgressTranslation, doExport: boolean): Promise<boolean> {
         let success = true;
 
-        if (this.isTeamListStale()) {
+        if (await this.isTeamListStale()) {
             progress(teamList);
             success = success && await Sync.syncTeamList(client);
         }
@@ -177,7 +184,7 @@ export class Sync {
             let synced = 0;
             success = success && await Sync.syncTopLevelMessages(client, channel, checkCancel, n => progress(topLevelMessages(channel.displayName, synced += n)));
         }
-        setTopLevelMessagesLastSynced(await FindMsgChannel.getOldestSync());
+        await setTopLevelMessagesLastSynced(await FindMsgChannel.getOldestSync(), doExport);
 
         if (includeReplies) {
             const batchSize = 20;
@@ -224,7 +231,7 @@ export class Sync {
         let success = true;
 
         let team = await FindMsgTeam.get(teamId);
-        if (!team || this.isTeamListStale()) {
+        if (!team || await this.isTeamListStale()) {
             progress(teamList);
             success = success && await Sync.syncTeamList(client);
             team = await FindMsgTeam.get(teamId);
@@ -277,7 +284,7 @@ export class Sync {
                 await db.teams.bulkDelete(deletedTeamIds);
             });
 
-            setTeamsLastSynced(du.now());
+            await setTeamsLastSynced(du.now());
             return true;
         }
     }
@@ -578,8 +585,8 @@ export class Sync {
     /**
      * Based on the last sync time, check if the team list is considered stale and should be refreshed.
      */
-    private static isTeamListStale(): boolean {
-        const synced = getTeamsLastSynced();
+    private static async isTeamListStale(): Promise<boolean> {
+        const synced = await getTeamsLastSynced();
         const cutOff = du.subHours(du.now(), 12);
 
         if (!du.isValid(synced)) return true;
@@ -676,7 +683,7 @@ export class Sync {
     static async autoSyncChatAll(client: Client, checkCancel: throwFn = nop, progress: progressFn = nop, { chatList, replies }: ISyncProgressTranslation): Promise<boolean> {
         let success = true;
 
-        if (this.isChatListStale()) {
+        if (await this.isChatListStale()) {
             progress(chatList);
             success = success && await Sync.syncChatList(client);
         }
@@ -710,8 +717,8 @@ export class Sync {
     /**
      * Based on the last sync time, check if the chat list is considered stale and should be refreshed.
      */
-    private static isChatListStale(): boolean {
-        const synced = getChatsLastSynced();
+    private static async isChatListStale(): Promise<boolean> {
+        const synced = await getChatsLastSynced();
         const cutOff = du.subMinutes(du.now(), 3);
 
         if (!du.isValid(synced)) return true;
@@ -740,7 +747,7 @@ export class Sync {
                 await Promise.all(chats.map(t => FindMsgChat.put(t)));
             });
 
-            setChatsLastSynced(du.now());
+            await setChatsLastSynced(du.now());
             return true;
         }
     }
@@ -857,41 +864,201 @@ export class Sync {
      * @param messages
      */
     private static async getHostedImages(client: Client, messages: (IFindMsgChatMessage | IFindMsgChannelMessage)[]) {
+        log.info(`▼▼▼ getHostedImages START ▼▼▼`);
+        const msgMaps: Array<IMsgMap> = [];
+
+        const onloadCallBack = async (reader: FileReader, imgrec: IImageMap, parent: IMsgMap) => {
+            // log.info(`★★★★★★★★★★ reader.onLoad start for id: [${imgrec.id}] ★★★★★★★★★★`);
+            const result = reader.result;
+            if (result && typeof result == 'string') {
+                imgrec.dataUrl = result;
+            }
+
+            await db.images.put({
+                id:imgrec.id, 
+                data: imgrec.data, 
+                srcUrl: imgrec.srcUrl,
+                fetched: imgrec.fetched,
+                dataUrl: imgrec.dataUrl,
+            });
+
+            const gimg = document.createElement("graph-image") as GraphImage;
+            gimg.src = imgrec.id;
+            imgrec.image.replaceWith(gimg);
+
+            imgrec.done = true;
+
+            let chkMsg = true;
+            for (let j = 0; j < parent.images.length; j++) {
+                const imgRec = parent.images[j];
+                // log.info(`★★★★★★★★★★ checking images[${j}] => done? [${imgRec.done}] ★★★★★★★★★★`);
+                if (!imgRec.done) {
+                    // 一つでも未処理のイメージがあれば未完了とする
+                    chkMsg = false;
+                }
+            }
+            
+            if (chkMsg) {
+                await process(parent);
+            }
+        }
+
+        const process = async (msgmap: IMsgMap) => {
+            // msgmap.hasImage && log.info(`★★★★★★★★★★ getHostedImages body(before): [${msgmap.msg.body}] ★★★★★★★★★★`);
+            msgmap.msg.body = msgmap.tmpl.innerHTML;
+            // msgmap.hasImage && log.info(`★★★★★★★★★★ getHostedImages body(after): [${msgmap.msg.body}] ★★★★★★★★★★`);
+
+            if ('chatId' in msgmap.msg) {
+                await FindMsgChatMessage.put(msgmap.msg);
+            } else {
+                await FindMsgChannelMessage.put(msgmap.msg);
+            }
+
+            msgmap.completed = true;
+        };
+
+        const check = () => {
+            const checker = setInterval( function() {
+                // log.info(`★★★★★★★★★★ check process start ★★★★★★★★★★`);
+                let done = true;
+                // すべてのメッセージが処理済みかどうかをチェック
+                for (let i = 0; i < msgMaps.length; i++) {
+                    const rec = msgMaps[i];
+                    // log.info(`★★★★★★★★★★ checking msgMaps[${i}] => completed? [${rec.completed}] ★★★★★★★★★★`);
+                    if (!rec.completed) {
+                        done = false;
+                        break;
+                    }
+
+                }
+                // log.info(`★★★★★★★★★★ check process end... done? [${done}] ★★★★★★★★★★`);
+                if (done) {
+                    clearInterval(checker);
+                }
+            }, 10);
+        };
+
+        // let withImage = 0;
+        // let withoutImage = 0;
         for (const msg of messages.filter(m => m.type === "html")) {
             const tmpl = document.createElement("template");
             tmpl.innerHTML = msg.body;
+
+            const msgmap: IMsgMap = {
+                msg: msg,
+                tmpl: tmpl,
+                hasImage: false,
+                completed: false,
+                images: [],
+            };
+            msgMaps.push(msgmap);
 
             for (const image of Array.from(tmpl.content.querySelectorAll("img"))) {
                 const srcUrl = image.src;
 
                 if (isGraphHostedContentUrl(srcUrl)) {
                     try {
-                        // Note: download as Blob instead of ArrayBuffer because Blob contains the mime type
+
                         const data: Blob = await client.api(srcUrl).responseType(ResponseType.BLOB).get();
                         const id = await hashBlob(data);
-
-                        await db.images.put({
-                            id, data, srcUrl,
+                        
+                        msgmap.hasImage = true;
+                        const imgRec: IImageMap = {
+                            id: id,
+                            data: data,
+                            srcUrl: srcUrl,
                             fetched: new Date().getTime(),
-                        });
-
-                        const gimg = document.createElement("graph-image") as GraphImage;
-                        gimg.src = id;
-                        image.replaceWith(gimg);
+                            dataUrl: "",
+                            image: image,
+                            done: false,
+                        };
+                        msgmap.images.push(imgRec);
+                        
                     } catch (error) {
                         log.error(error);
                         AI.trackException({ error });
                     }
                 }
             }
+            // if (msgmap.hasImage) {
+            //     withImage += 1;
+            // } else {
+            //     withoutImage += 1;
+            // }
 
-            msg.body = tmpl.innerHTML;
+            // for (const image of Array.from(tmpl.content.querySelectorAll("img"))) {
+            //     const srcUrl = image.src;
 
-            if ('chatId' in msg) {
-                await FindMsgChatMessage.put(msg);
-            } else {
-                await FindMsgChannelMessage.put(msg);
-            }
+            //     if (isGraphHostedContentUrl(srcUrl)) {
+            //         try {
+            //             // Note: download as Blob instead of ArrayBuffer because Blob contains the mime type
+            //             const data: Blob = await client.api(srcUrl).responseType(ResponseType.BLOB).get();
+            //             const id = await hashBlob(data);
+
+            //             await db.images.put({
+            //                 id, data, srcUrl,
+            //                 fetched: new Date().getTime(),
+            //             });
+
+            //             const gimg = document.createElement("graph-image") as GraphImage;
+            //             gimg.src = id;
+            //             image.replaceWith(gimg);
+            //         } catch (error) {
+            //             log.error(error);
+            //             AI.trackException({ error });
+            //         }
+            //     }
+            // }
+
+            // msg.body = tmpl.innerHTML;
+
+            // if ('chatId' in msg) {
+            //     await FindMsgChatMessage.put(msg);
+            // } else {
+            //     await FindMsgChannelMessage.put(msg);
+            // }
         }
+
+        // log.info(`★★★★★★★★★★ HTML Message count: [${msgMaps.length}] withImage: [${withImage}] withoutImage:[${withoutImage}] ★★★★★★★★★★`);
+
+        check();
+
+        const processImage = async (rec: IMsgMap) => {
+            if (!rec.hasImage) {
+                await process(rec);
+            } else {
+                rec.images.forEach(imgrec => {
+                    // log.info(`★★★★★★★★★★ Image processing start for id: [${imgrec.id}] ★★★★★★★★★★`);
+                    const reader = new FileReader;
+                    reader.onload = async () => {
+                        await onloadCallBack(reader, imgrec, rec);
+                    };
+
+                    reader.readAsDataURL(imgrec.data);
+                    // log.info(`★★★★★★★★★★ Image processing end for id: [${imgrec.id}] ★★★★★★★★★★`);
+                })
+            }
+        };
+
+        for (let i = 0; i < msgMaps.length; i++) {
+            const rec = msgMaps[i];
+            // log.info(`★★★★★★★★★★ msgMaps[${i}] rec.completed: [${rec.completed}] rec.hasImage: [${rec.hasImage}] ★★★★★★★★★★`);
+            await processImage(rec);
+        }
+
+        log.info(`▲▲▲ getHostedImages END ▲▲▲`);
     }
+}
+
+interface IImageMap extends IFindMsgImageDb {
+    image: HTMLImageElement;
+    done: boolean;
+}
+
+interface IMsgMap {
+    msg: IFindMsgChatMessage | IFindMsgChannelMessage;
+    tmpl: HTMLTemplateElement;
+    hasImage: boolean;
+    completed: boolean;
+    images: IImageMap[];
 }

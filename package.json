@@ -28,6 +28,7 @@
     "express": "4.17.1",
     "express-msteams-host": "1.6.2",
     "express-session": "1.17.1",
+    "indexeddb-export-import": "^2.1.2",
     "mark.js": "^8.11.1",
     "morgan": "1.10.0",
     "office-ui-fabric-react": "^7.144.0",

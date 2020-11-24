@@ -1,4 +1,5 @@
 import { ApplicationInsights, IEventTelemetry, IExceptionTelemetry, IMetricTelemetry, ITraceTelemetry, Snippet } from '@microsoft/applicationinsights-web';
+import { AppConfig } from '../../config/AppConfig';
 
 // set this to enable/disable AI completely
 const useApplicationInsights = true;
@@ -11,7 +12,10 @@ function initAI(): ApplicationInsights | null {
     if (useApplicationInsights) {
         const config: Snippet = {
             config: {
-                instrumentationKey: '0b53b004-005f-46be-8fc1-63b98d9654e4',
+                // instrumentationKey: '0b53b004-005f-46be-8fc1-63b98d9654e4',
+                // Webapps(kacomslabo)
+                // instrumentationKey: '474f6161-5de0-419b-baa4-9d57b2abdb37',
+                instrumentationKey: AppConfig.AppInsight.instrumentationKey,
                 maxBatchInterval: 5000,
                 maxAjaxCallsPerView: -1,
                 disableDataLossAnalysis: false,

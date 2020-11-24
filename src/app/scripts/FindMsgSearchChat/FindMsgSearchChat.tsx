@@ -102,9 +102,10 @@ export interface IChatSearchTabTranslation {
 
 
 const lastSyncedKey = "FindMsgSearchChat_last_synced";
-const loadChatLastSynced = (): Date => du.parseISO(localStorage.getItem(lastSyncedKey) ?? "");
-const storeChatLastSynced = (m: Date): void => localStorage.setItem(lastSyncedKey, du.formatISO(m));
-
+// const loadChatLastSynced = (): Date => du.parseISO(localStorage.getItem(lastSyncedKey) ?? "");
+// const storeChatLastSynced = (m: Date): void => localStorage.setItem(lastSyncedKey, du.formatISO(m));
+const loadChatLastSynced = async (): Promise<Date> => await db.getLastSync(lastSyncedKey);
+const storeChatLastSynced = async (m: Date): Promise<void> => await db.storeLastSync(lastSyncedKey, m, true);
 
 interface DateRangeRadioGroupItemProps extends RadioGroupItemProps {
     value: DateRange;
@@ -148,7 +149,8 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
 
             // There is no easy way to determine a value for this based on the sync logic,
             // so do the expedient thing is to use the last time sync was executed in this tab.
-            lastSynced: loadChatLastSynced(),
+            // lastSynced: loadChatLastSynced(),
+            lastSynced: du.invalidDate(),
 
             teamsInfo: {
                 entityId: this.getQueryVariable("eid") ?? "",
@@ -169,7 +171,7 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
     public async componentDidMount(): Promise<void> {
         this.updateTheme(this.getQueryVariable("theme"));
 
-        await this.getDataFromDb();
+        // await this.getDataFromDb();
         let { t } = this.state;
 
         if (await this.inTeams()) {
@@ -184,11 +186,14 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                 websiteUrl: location.href,
             });
 
+            db.login(this.msGraphClient, context.loginHint?? "");
+
             t = strings.get(context.locale);
 
             this.setState({
                 t,
                 loginRequired: !haveUserInfo(context.loginHint),
+                lastSynced: await loadChatLastSynced(),
                 teamsInfo: {
                     entityId: context.entityId,
                     subEntityId: context.subEntityId ?? null,
@@ -196,8 +201,12 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                 }
             });
         } else {
+
+            db.login(this.msGraphClient, this.state.teamsInfo.loginHint);
+
             this.setState({
                 loginRequired: !haveUserInfo(this.state.teamsInfo.loginHint),
+                lastSynced: await loadChatLastSynced(),
                 teamsInfo: {
                     entityId: "",
                     subEntityId: null,
@@ -207,6 +216,7 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
         }
 
         document.title = t.chatSearch.pageTitle;
+        await this.getDataFromDb();
 
         this.setState({
             askForStoragePermission: !storage.granted() && storage.askForPermission,
@@ -531,7 +541,7 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
             const result = await Sync.autoSyncChatAll(this.msGraphClient, checkCancel, this.reportProgress, syncProgress);
             if (result) {
                 lastSynced = du.now();
-                storeChatLastSynced(lastSynced);
+                await storeChatLastSynced(lastSynced);
             } else {
                 AI.trackEvent({ name: "syncProblem" });
                 this.setState({ warning: syncProgress.syncProblem });
@@ -573,6 +583,7 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
             const users = await userCache.getKnownUsers();
             const searchUserOptions = users.map(({ id, displayName }) => ({ key: id, header: displayName || unknownUserDisplayName }));
             const uid = userId(this.state.teamsInfo.loginHint);
+            const lastSynced = await loadChatLastSynced();
 
             const chats = await Promise.all(dbChats.map(async (c) => {
                 let singleCounterpart: string | null = null;
@@ -605,7 +616,7 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                 return { ...c, singleCounterpart };
             }));
 
-            this.setState({ chats, checkState: cs, searchUserOptions });
+            this.setState({ lastSynced, chats, checkState: cs, searchUserOptions });
         }
         catch (error) {
             AI.trackException({ exception: error });

@@ -1,6 +1,6 @@
 import React from "react";
 import * as log from '../logger';
-import { IMyOwnState, initialDisplayCount, loadMoreCount, TeamsBaseComponentWithAuth } from "../msteams-react-base-component-with-auth";
+import { DateRange, IMyOwnState, initialDisplayCount, ITeamsAuthComponentState, loadMoreCount, SearchUserItem, TeamsBaseComponentWithAuth } from "../msteams-react-base-component-with-auth";
 import { SyncWidget } from "../SyncWidget";
 import { Button, Dropdown, Flex, Input, Segment, Text } from "../ui";
 import { cancellation, OperationCancelled } from "../utils";
@@ -9,6 +9,8 @@ import { EventTable } from "./EventTable";
 import { EventOrder, FindMsgEvent } from "../db/Event/FindMsgEventEntity";
 import { ISyncFunctionArg, OrderByDirection } from "../db/db-accessor-class-base";
 import { IFindMsgEvent } from "../db/Event/IFindMsgEvent";
+import { AppConfig } from "../../../config/AppConfig";
+import * as du from "../dateUtils";
 
 /** スケジュール検索用ロケール依存リソース定義 */
 export interface IFindMsgScheduleTranslation {
@@ -23,6 +25,7 @@ interface ISearchResult {
     hasMore: boolean;
     order: EventOrder;
     dir: OrderByDirection;
+    rowCount: number;
 }
 
 /** クラス固有のステートプロパティ */
@@ -30,10 +33,56 @@ interface IFindMsgSearchScheduleState extends IMyOwnState {
     searchResult: ISearchResult;
 }
 
+const stateSaveKey = `${AppConfig.AppInfo.name}SearchScheduleSavedState`
+
+interface ISavedState {
+    /** ソートキー */
+    order: EventOrder;
+    /** ソート方向 */
+    dir: OrderByDirection;
+    /** 下記条件で絞り込んだ行数 */
+    rowCount: number;
+    /** リストのフィルタ機能を提供する場合のフィルタ指定文字 */
+    filterInput: string;
+    /** 日付範囲の種類（日付範囲を使用する場合用） */
+    searchTime: DateRange;
+    /** 日付範囲（from） */
+    searchTimeFrom: Date;
+    /** 日付範囲（to） */
+    searchTimeTo: Date;   
+    /** ユーザ選択プルダウンで選択されているユーザ */
+    searchUsers: SearchUserItem[];
+}
+
 /**
  * スケジュール検索コンポーネント
  */
 export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
+    protected async setAdditionalState(newstate: ITeamsAuthComponentState, context?: microsoftTeams.Context, inTeams?: boolean): Promise<void> {
+        if (context && inTeams? true : false) {
+            log.info(`★★★ setAdditionalState is called from componentDidMount; hosted in teams ★★★`);
+        }
+        const saved = localStorage.getItem(stateSaveKey);
+        if (saved) {
+            log.info(`★★★ Saved condition fetched from localStorage: [${saved}] ★★★`);
+            const filter = JSON.parse(saved);
+
+            newstate.filterInput = String(filter.filterInput);
+            newstate.searchTime = Number(filter.searchTime);
+            newstate.searchTimeFrom = du.parseISO(String(filter.searchTimeFrom));
+            newstate.searchTimeTo = du.parseISO(String(filter.searchTimeTo));
+            newstate.searchUsers = filter.searchUsers;
+            const me = newstate.me as IFindMsgSearchScheduleState;
+            me.searchResult.dir = filter.dir;
+            me.searchResult.order = filter.order;
+            me.searchResult.rowCount = Number(filter.rowCount);
+        }
+    }
+
+    protected requireDatabase = true;
+    
+    protected requireMicrosoftLogin = true;
+
     protected isTeamAndChannelComboIncluded = false;
 
     protected isUsingStorage = true;
@@ -63,7 +112,7 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
             const syncResult = await FindMsgEvent.sync(arg);
 
             if (syncResult) {
-                lastSynced = FindMsgEvent.getLastSynced();
+                lastSynced = await FindMsgEvent.getLastSynced();
             } else {
                 AI.trackEvent({ name: "syncProblem" });
                 this.setState({ warning: syncProgress.syncProblem });
@@ -86,7 +135,7 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
 
     protected async GetLastSync(): Promise<Date> {
         log.info(`■■■ GetLastSync ENTERED ■■■`)
-        return FindMsgEvent.getLastSynced();
+        return await FindMsgEvent.getLastSynced();
     }
 
     protected CreateMyState(): IFindMsgSearchScheduleState {
@@ -98,6 +147,7 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
                 hasMore: false,
                 order: EventOrder.start,
                 dir: OrderByDirection.descending,
+                rowCount: 0,
             },
         };
     }
@@ -111,6 +161,7 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
                 hasMore: value.hasMore,
                 order: value.order,
                 dir: value.dir,
+                rowCount: value.rowCount,
                 };    
         } else {
             me.searchResult = {
@@ -118,6 +169,7 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
                 hasMore: false,
                 order: EventOrder.start,
                 dir: OrderByDirection.descending,
+                rowCount: 0,
                 };    
         }
         log.info(`▲▲▲ setMyState END ▲▲▲`);
@@ -242,7 +294,8 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
 
     protected setStateCallBack(): void {
         this.getUserOptions();
-        this.getEvents();
+        const { order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
+        this.getEvents(order, dir);
     }
     
     protected onFilterChangedCallBack(): void {
@@ -251,6 +304,7 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
     }
 
     protected onSearchUserChangedCallBack(): void {
+        this.getUserOptions();
         const { order, dir } = (this.state.me as IFindMsgSearchScheduleState).searchResult;
         this.getEvents(order, dir);
     }
@@ -262,24 +316,45 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
         this.getEvents(order, dir);
     }
 
-    private getEvents = async (order: EventOrder = EventOrder.start, dir: OrderByDirection = OrderByDirection.descending): Promise<void> => {
+    private getEvents = async (order: EventOrder, dir: OrderByDirection): Promise<void> => {
         log.info(`▼▼▼ getEvents START ▼▼▼`);
         const {
-            filterInput, searchTimeFrom, searchTimeTo, searchUsers,
+            filterInput, searchTime, searchTimeFrom, searchTimeTo, searchUsers,
         } = this.state;
+        const {rowCount} = (this.state.me as IFindMsgSearchScheduleState).searchResult;
 
         this.setState({ loading: true });
 
         try {
+            const maxRows = (initialDisplayCount < rowCount)? rowCount : initialDisplayCount;
+
             const userIds = new Set<string>(searchUsers.map((u) => u.key));
-            const [events, hasMore] = await FindMsgEvent.fetch(order, dir, 0, initialDisplayCount, filterInput, searchTimeFrom, searchTimeTo, userIds);
+            const [events, hasMore] = await FindMsgEvent.fetch(order, dir, 0, maxRows, filterInput, searchTimeFrom, searchTimeTo, userIds);
             log.info(` ★★★ fetched [${events.length}] events from DB ★★★`);
             const value: ISearchResult = {
                 events: events,
                 hasMore: hasMore,
                 order: order,
                 dir: dir,
+                rowCount: events.length,
             };
+
+            const save: ISavedState = {
+                order: order,
+                dir: dir,
+                rowCount: value.events.length,
+                filterInput: filterInput,
+                searchTime: searchTime,
+                searchTimeFrom: searchTimeFrom,
+                searchTimeTo: searchTimeTo,
+                searchUsers: searchUsers
+            };
+            const json = JSON.stringify(save);
+            // sessionStorageではTeamsアプリでは他のページを表示した時点で無効になってしまうらしい。
+            // ※Teams-WebではsessionStorageがTab移動の他、他のアプリを使用したあとでも有効だったので、結局localStorageと変わらない。
+            localStorage.setItem(stateSaveKey, json);
+            log.info(`★★★ Filter condition saved: [${json}] ★★★`);
+
             this.setState({
                 filterString: filterInput,
                 searchTimeFrom: searchTimeFrom,
@@ -300,7 +375,7 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
     private loadMoreEvents = async () => {
         log.info(`▼▼▼ loadMoreEvents START ▼▼▼`);
         const {
-            filterInput, searchTimeFrom, searchTimeTo, searchUsers,
+            searchTime, filterInput, searchTimeFrom, searchTimeTo, searchUsers,
         } = this.state;
         const searchResult = (this.state.me as IFindMsgSearchScheduleState).searchResult
 
@@ -315,8 +390,23 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
                 events: [...searchResult.events, ...newEvents],
                 hasMore: hasMore, 
                 order: searchResult.order, 
-                dir: searchResult.dir           
+                dir: searchResult.dir  ,
+                rowCount: [...searchResult.events, ...newEvents].length,         
             }
+
+            const save: ISavedState = {
+                order: me.searchResult.order,
+                dir: me.searchResult.dir,
+                rowCount: me.searchResult.rowCount,
+                filterInput: filterInput,
+                searchTime: searchTime,
+                searchTimeFrom: searchTimeFrom,
+                searchTimeTo: searchTimeTo,
+                searchUsers: searchUsers
+            };
+            const json = JSON.stringify(save);
+            localStorage.setItem(stateSaveKey, json);
+            log.info(`★★★ Filter condition saved (more): [${json}] ★★★`);
 
             this.setState({
                 me: me
@@ -336,7 +426,7 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
     protected getUserOptions = async (): Promise<void> => {
         try {
             const users = await FindMsgEvent.getOrganizers();
-            const searchUserOptions = users.map((rec) => ({ key: rec, header: rec }));
+            const searchUserOptions = users.map((rec) => ({ key: rec, header: rec, selected: this.isExist(rec, this.state.searchUsers) }));
 
             this.setState({ searchUserOptions });
         }
@@ -344,6 +434,16 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
             AI.trackException({ exception: error });
             this.setError(error, this.state.translation.error.indexedDbReadFailed);
         }
+    }
+
+    private isExist(key: string, arr: SearchUserItem[]): boolean {
+        let res = false;
+        arr.forEach(rec => {
+            if (key === rec.key) {
+                res = true;
+            }
+        });
+        return res;
     }
 
 }

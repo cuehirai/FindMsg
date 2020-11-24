@@ -88,8 +88,8 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
                 text = collapseWhitespace((api.subject ?? "") + " " + body).toLowerCase();
             } else if (api.body.contentType === "html") {
                 type = "html";
-                body = collapseConsecutiveChar(sanitize(api.body.content ?? ""), "_", 3);
-                text = collapseWhitespace((api.subject ?? "") + " " + stripHtml(body)).toLowerCase();
+                body = api.body.content ?? "";
+                text = collapseWhitespace((api.subject ?? "") + " " + stripHtml(collapseConsecutiveChar(sanitize(body), "_", 3))).toLowerCase();
             } else {
                 type = "text";
                 body = "";
@@ -220,7 +220,6 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
             log.info(`calling API [/me/calendar/events]`);
 
             const response = await client.api('/me/calendar/events')
-            .version('beta')
             .get();
             const fetched = await getAllPages<Event>(client, response);
             fetched.forEach(rec => {
@@ -261,7 +260,7 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
                     log.info(`★★★ Events deletion completed`);
                 });
     
-                this.storeLastSynced(du.now());
+                await this.storeLastSynced(du.now(), true);
     
             }
         } catch (error) {
@@ -279,7 +278,7 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
     protected async fetchApiDelta(arg: ISyncFunctionArg): Promise<T[]>{
         const res: Array<IFindMsgEvent> = [];
         const client = arg.client;
-        const last = this.getLastSynced();
+        const last = await this.getLastSynced();
 
         if (!du.isValid(last)) {
             throw new Error("last delta sync invalid");
@@ -292,7 +291,6 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
             arg.progress(arg.translate.common.syncEntity(arg.translate.entities.events));
 
             const cutOffTime = du.subMinutes(last, 5);
-            const now = du.now();
             const endtime = du.now();
             endtime.setFullYear(endtime.getFullYear() + 1);
 
@@ -300,9 +298,6 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
             const delta = `/me/calendarView/delta?startdatetime=${cutOffTime.toISOString()}&enddatetime=${endtime.toISOString()}`;
             log.info(`calling API [${delta}]`);
             const response = await client.api(delta)
-                // .version('beta')
-                // .top(50) // max supported is 50
-                // .filter(`lastModifiedDateTime gt ${cutOffTime.toISOString()}`)
                 .get();
 
             const fetched = await getAllPages<Event>(client, response);
@@ -325,7 +320,7 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
                 }));
             });
 
-            this.storeLastSynced(now);
+            await this.storeLastSynced(du.now(), true);
         } catch (error) {
             AI.trackException({
                 exception: error,

@@ -17,6 +17,11 @@ import { FindMsgChannel, FindMsgTeam, FindMsgUserCache } from "./db";
 import { ICommonMessage } from "./i18n/ICommonMessage";
 import { StoragePermissionIndicator } from "./StoragePermissionIndicator";
 import { StoragePermissionWidget } from "./StoragePermissionWidget";
+import { User } from "@microsoft/microsoft-graph-types-beta";
+import { db } from "./db/Database";
+
+/** ログインユーザのuserPrincipalNameをlocalStorageに保存するキー */
+export const currentLoginHintKey = `${process.env.PACKAGE_NAME}MyLoginHint`;
 
 /** ユーザ選択コンボボックスの要素タイプ */
 export declare type SearchUserItem = DropdownItemProps & { key: string };
@@ -63,6 +68,9 @@ export interface ITeamsAuthComponentState extends ITeamsBaseComponentState, Sync
     /** 警告メッセージ */
     warning: string;
 
+    /** Teamsでホストされているか */
+    hostedInTeams: boolean;
+
     /** Teamsに関連するステータス */
     teamsInfo: ITeamsInfo;
 
@@ -103,6 +111,9 @@ export interface ITeamsAuthComponentState extends ITeamsBaseComponentState, Sync
     /** 永続化ストレージの許可が必要かどうか */
     askForStoragePermission: boolean;
 
+    /** ダイアログを使用する場合にダイアログを開くスイッチとして使用してください */
+    dialogOpen: boolean;
+
     /** クラス固有のステータス */
     me: IMyOwnState;
 }
@@ -128,6 +139,8 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         const locale = this.getQueryVariable("l");
 
         this.state = {
+            hostedInTeams: false,
+
             // ITeamsBaseComponentState
             theme: this.getTheme(this.getQueryVariable("theme")),
 
@@ -176,6 +189,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
 
             translation: strings.get(locale),
             askForStoragePermission: false,
+            dialogOpen: false,
 
             // 派生クラスで独自に定義するプロパティ
             me: this.CreateMyState(),
@@ -187,6 +201,16 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         this.msGraphClient = Client.init({ authProvider: this.authProvider });
         log.info(`▲▲▲ constructor END ▲▲▲`);
     }
+
+    /**
+     * このページでマイクロソフトのログインが必要かどうかを宣言してください。
+     */
+    protected abstract requireMicrosoftLogin: boolean;
+
+    /**
+     * このページでデータベースを使用するかどうかを宣言してください。
+     */
+    protected abstract requireDatabase: boolean;
 
     /**
      * このページで永続化ストレージを使用するかどうかを宣言してください。
@@ -208,32 +232,40 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
      * オーバーライドしてクラス固有のステータスを設定してください。
      * ※initializedに必ずtrueを設定すること！
      */
-    protected abstract CreateMyState(): IMyOwnState
+    protected abstract CreateMyState(): IMyOwnState;
+
+    /**
+     * オーバーライドしてinitBaseInfoが標準のステータスを編集したあとで追加のステータス編集を行ってください。
+     * @param newstate このオブジェクトのプロパティを直接更新してください
+     * @param context ※initBaseInfoが受け取った引数がそのまま渡されます
+     * @param inTeams ※initBaseInfoが受け取った引数がそのまま渡されます
+     */
+    protected abstract async setAdditionalState(newstate: ITeamsAuthComponentState, context?: microsoftTeams.Context, inTeams?: boolean): Promise<void>;
 
     /**
      * componentDidMountから呼び出します。
      * オーバーライドしてクラス固有の初期化処理を実装してください。
      * @param context 
      */
-    protected abstract setMyState(): IMyOwnState
+    protected abstract setMyState(): IMyOwnState;
 
     /**
      * renderから呼び出します。
      * オーバーライドしてコンテンツ上部（検索条件など）の要素を記述してください。
      */
-    protected abstract renderContentTop(): JSX.Element
+    protected abstract renderContentTop(): JSX.Element;
 
     /**
      * renderから呼び出します。
      * オーバーライドしてコンテンツ（一覧など）の要素を記述してください。
      */
-    protected abstract renderContent(): JSX.Element
+    protected abstract renderContent(): JSX.Element;
 
     /**
      * renderから呼び出します。
      * オーバーライドしてコンテンツの追加要素を記述してください。
      */
-    protected abstract renderContentBottom(): JSX.Element
+    protected abstract renderContentBottom(): JSX.Element;
 
     /**
      * オーバーライドしてinitBaseInfoにおけるsetStateのコールバックを実装してください。
@@ -264,13 +296,13 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
      * Graphからのデータを同期する場合はオーバーライドして同期処理を実装してください。
      * 使用時はSyncWidgetの属性にこのメソッドを設定します。（例：syncStart={this.startSync}）
      */
-    protected abstract async startSync(): Promise<void> 
+    protected abstract async startSync(): Promise<void>; 
 
     /**
      * 同期を必要とする場合はオーバーライドしてクラス固有の最終同期日時を返却してください。
      * @param target 
      */
-    protected abstract async GetLastSync(target?: string): Promise<Date>
+    protected abstract async GetLastSync(target?: string): Promise<Date>;
     
     // コンポーネントがマウントされたときに呼び出されます。
     // ここでステータスをセットするとページが再描画されます。
@@ -287,7 +319,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             log.info("context", context);
             this.updateTheme(context.theme);
             microsoftTeams.appInitialization.notifySuccess();
-            this.initBaseInfo(context);
+            this.initBaseInfo(context, true);
         } else {
             this.initBaseInfo();
         }
@@ -297,6 +329,8 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
                 askForStoragePermission: !storage.granted() && storage.askForPermission,
                 loading: false
             });
+        } else {
+            this.setState({loading: false});
         }
         log.info(`▲▲▲ componentDidMount END ▲▲▲`);
     }
@@ -311,16 +345,15 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             error,
             warning,
 
-            authResult,
-            loginRequired,
             askForStoragePermission,
 
             translation: {
-                footer, auth,
+                footer,
                 storagePermission,
             }
         } = this.state;
 
+        const loginDialog = this.renderLoginDialog();
         const contentTop = this.renderContentTop();
         const content = this.renderContent();
         const contentBottom = this.renderContentBottom();
@@ -328,21 +361,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         const res:JSX.Element = (
             <Provider theme={theme}>
                 <Page>
-                    <Dialog
-                        open={loginRequired && authResult === null}
-                        header={auth.loginDialogHeader}
-                        confirmButton={auth.loginButtonText}
-                        onConfirm={this.login}
-                        content={auth.loginMessage}
-                    />
-
-                    <Dialog
-                        open={authResult !== null}
-                        header={authResult?.isRecoverable ? auth.loginDialogHeader : auth.unkownError}
-                        confirmButton={authResult?.isRecoverable ? (authResult.adminConsentRequired ? auth.adminLoginButtonText : auth.loginButtonText) : undefined}
-                        onConfirm={this.login}
-                        content={authResult?.message}
-                    />
+                    {this.requireMicrosoftLogin && loginDialog}
 
                     {contentTop}
 
@@ -384,9 +403,10 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
      * コンポーネントマウント時の初期化処理
      * @param context 
      */
-    protected initBaseInfo = async (context?: microsoftTeams.Context): Promise<void> => {
+    protected initBaseInfo = async (context?: microsoftTeams.Context, inTeams?: boolean): Promise<void> => {
         log.info(`▼▼▼ initBaseInfo START ▼▼▼`);
-        const loginHint = context?.loginHint ?? this.state.teamsInfo.loginHint;
+        const hostedInTeams = inTeams?? this.state.hostedInTeams;
+        let loginHint = context?.loginHint ?? this.state.teamsInfo.loginHint;
         let groupId = context?.groupId ?? this.state.teamsInfo.groupId;
         let channelId = context?.channelId ?? this.state.teamsInfo.channelId;
         const entityId = context?.entityId ?? "";
@@ -400,6 +420,10 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             contentUrl: location.href,
             websiteUrl: location.href,
         });
+
+        if (this.requireDatabase) {
+            await db.login(this.msGraphClient,loginHint);
+        }
 
         const lastSynced = await this.GetLastSync(channelId);
 
@@ -476,7 +500,26 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             channelId = channelOptions[teamIdx][channelIdx].key;
         }
 
-        this.setState({
+        const loginRequired = !haveUserInfo(loginHint);
+        if (!loginRequired && !hostedInTeams) {
+            try {
+                log.info(`★★★ Try get 'me' from graph ★★★`)
+                const me: User = await this.msGraphClient.api('/me').get();
+                const res = me.userPrincipalName ?? "";
+                if (!(res === "")) {
+                    loginHint = res;
+                    sessionStorage.setItem(currentLoginHintKey, loginHint);
+                    log.info(`★★★ Successfully saved [${loginHint}] to sessionStorage ★★★`)
+                }
+                log.info(`★★★ End get 'me' from graph ★★★`)
+            } catch (error) {
+                log.error(error);
+            }
+        }
+
+        const newstate: ITeamsAuthComponentState = {
+            ...this.state,
+            hostedInTeams: hostedInTeams,
             teamsInfo: {
                 groupId, channelId,
                 teamOptions, channelOptions,
@@ -489,11 +532,50 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             loginRequired: !haveUserInfo(loginHint),
             translation: translation,
             me: this.setMyState(),
-        }, this.setStateCallBack);
+        };
+        await this.setAdditionalState(newstate, context, inTeams);
+
+        this.setState( newstate, this.setStateCallBack );
 
         document.title = this.GetPageTitle();
 
         log.info(`▲▲▲ initBaseInfo END ▲▲▲`);
+    }
+
+    /**
+     * (ユーティリティ)マイクロソフトアカウントのログインダイアログ
+     */
+    protected renderLoginDialog(): JSX.Element {
+        const {
+            authResult,
+            loginRequired,
+
+            translation: {
+                auth,
+            }
+        } = this.state;
+
+        const res:JSX.Element = (
+            <div>
+                <Dialog
+                    open={loginRequired && authResult === null}
+                    header={auth.loginDialogHeader}
+                    confirmButton={auth.loginButtonText}
+                    onConfirm={this.login}
+                    content={auth.loginMessage}
+                />
+
+                <Dialog
+                    open={authResult !== null}
+                    header={authResult?.isRecoverable ? auth.loginDialogHeader : auth.unkownError}
+                    confirmButton={authResult?.isRecoverable ? (authResult.adminConsentRequired ? auth.adminLoginButtonText : auth.loginButtonText) : undefined}
+                    onConfirm={this.login}
+                    content={authResult?.message}
+                />               
+            </div>
+        );
+
+        return res;
     }
 
     /**
