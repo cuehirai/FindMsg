@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <title>Message Finder</title>
+  <title>Loading...</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!-- inject:css -->
   <!-- endinject -->
@@ -12,31 +12,14 @@
   <!-- {{COMMIT_NUMBER}} -->
 </head>
 
-<body>
-  <header class="l-header">
-    <div class="logo">
-      <img src="https://static2.sharepointonline.com/files/fabric/assets/brand-icons/product-fluent/svg/teams_48x1.svg"
-        class="logo">
-    </div>
-    <div class="l-title">
-      <h1>Welcome to <em>Message Finder</em>!</h1>
-    </div>
-  </header>
-  <article class="l-article">
-    <p>
-      <a href="https://cuehirai.github.io/FindMsgSearchTab/index.html?l=ja-jp">Channel Message</a>
-    </p>
-    <p>
-      <a href="https://cuehirai.github.io/FindMsgSearchChat/index.html?l=ja-jp">Chat Message</a>
-    </p>
-    <p>
-      <a href="https://cuehirai.github.io/FindMsgTopicsTab/index.html?l=ja-jp">Topics List</a>
-    </p>
-    <p>
-      <a href="https://cuehirai.github.io/FindMsgSearchSchedule/index.html?l=ja-jp">Schedule</a>
-    </p>
-
-  </article>
+<body class="minWidth">
+  <div id='app'>
+    Loading...
+  </div>
+  <script src="/scripts/client.js"></script>
+  <script type='text/javascript'>
+    FindMsg.FindMsgIndex.render(document.getElementById('app'), {});
+  </script>
 </body>
 
 </html>

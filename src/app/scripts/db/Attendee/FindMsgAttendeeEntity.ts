@@ -75,14 +75,14 @@ class AttendeeEntity<D extends IFindMsgAttendeeDb, T extends IFindMsgAttendee, A
                 res.forEach(rec => this.put(rec as T));
                 log.info(`registered [${res.length}] attendees for event [${parent.id}]`)
             });
-            this.storeLastSynced(du.now());
+            await this.storeLastSynced(du.now());
         }
         return res as T[];
     }
 
     protected async fetchApiDelta(arg: ISyncFunctionArg): Promise<T[]> {
         const res: Array<IFindMsgAttendee> = (arg.parent && (arg.parent as IFindMsgEvent).attendees) ?? [];
-        this.storeLastSynced(du.now());
+        await this.storeLastSynced(du.now());
         return res as T[];
     }
 

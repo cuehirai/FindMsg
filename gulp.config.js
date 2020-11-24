@@ -51,7 +51,7 @@ const config = {
     }
     ],
     // This is the name of the packaged manifest file
-    manifestFileName: "FindMsg.zip"
+    manifestFileName: "manifest.zip"
 };
 
 module.exports = config;

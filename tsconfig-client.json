@@ -4,6 +4,7 @@
         "target": "ES2017",
         "lib": ["DOM", "ES2017", "ES2019.Array"],
         "moduleResolution": "node",
+        "resolveJsonModule": true,
         "experimentalDecorators": true,
         "esModuleInterop": true,
         "removeComments": true,

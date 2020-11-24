@@ -1,6 +1,6 @@
 import { ISyncWidgetTranslation } from "../SyncWidget";
 import { IMessageTableTranslation } from "../FindMsgTopicsTab/MessageTable";
-import { ITopicsTabTranslation, ISearchTabTranslation, IFindMsgTopicsTabConfigTranslation, IChatSearchTabTranslation } from "../client";
+import { ITopicsTabTranslation, ISearchTabTranslation, IFindMsgTopicsTabConfigTranslation, IChatSearchTabTranslation, IFindMsgIndexTranslation } from "../client";
 import { ISyncProgressTranslation } from "../db";
 import { IAuthMessages } from "../auth/IAuthMessages";
 import { ICommonErrorMessage } from "./ICommonErrorMessage";
@@ -39,5 +39,6 @@ export interface IMessageTranslation {
     chatSearch: IChatSearchTabTranslation;
     schedule: IFindMsgScheduleTranslation;
     eventTable: IEventTableTranslation;
+    about: IFindMsgIndexTranslation;
 
 }

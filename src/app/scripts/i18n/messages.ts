@@ -8,7 +8,7 @@ const availableLocales: { [key: string]: IMessageTranslation | undefined } = Obj
 availableLocales.en = messages_en;
 availableLocales.ja = messages_ja;
 
-const fallbackLocale = messages_en;
+const fallbackLocale = messages_ja;
 
 export const get = (locale?: string | null): IMessageTranslation => {
     if (locale) {

@@ -155,8 +155,9 @@ export abstract class DbAccessorBaseComponent<D extends IDbEntityBase, T extends
     protected abstract syncSubentity(arg: ISyncFunctionArg, parents: T[]): Promise<boolean>;
 
     /** このエンティティの最終同期日時を取得 */
-    getLastSynced(): Date {
-        const res = du.parseISO(localStorage.getItem(this.lastSyncedKey) ?? "");
+    async getLastSynced(): Promise<Date> {
+        // const res = du.parseISO(localStorage.getItem(this.lastSyncedKey) ?? "");
+        const res = await db.getLastSync(this.lastSyncedKey);
         return res
     }
     
@@ -164,8 +165,9 @@ export abstract class DbAccessorBaseComponent<D extends IDbEntityBase, T extends
      * このエンティティを同期した日時を保存
      * @param m タイムスタンプ
      */
-    storeLastSynced(m: Date): void {
-        localStorage.setItem(this.lastSyncedKey, du.formatISO(m));
+    async storeLastSynced(m: Date, doExport?: boolean): Promise<void> {
+        // localStorage.setItem(this.lastSyncedKey, du.formatISO(m));
+        await db.storeLastSync(this.lastSyncedKey, m, doExport);
     }
 
     async get(id: string, subentity?: boolean): Promise<T | null> {
@@ -231,7 +233,7 @@ export abstract class DbAccessorBaseComponent<D extends IDbEntityBase, T extends
         log.info(`▼▼▼ ` + this.tableName + `.sync START ▼▼▼`);
         let res = false;
         
-        const lastSync = this.getLastSynced();
+        const lastSync = await this.getLastSynced();
         const neverSynced = !du.isValid(lastSync);
 
         // can only get messages in the last 8 months via delta endpoint, but add margin of error

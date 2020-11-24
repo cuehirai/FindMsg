@@ -179,5 +179,9 @@ export const messages: IMessageTranslation = {
         allday: "(all day)",
         notitle: "(no title)",
         noattendee: "(none)",
-        },
+    },
+
+    about: {
+            UserPrincipalNameTitle: "Please input your Microsoft Account",
+    },
 }

@@ -178,7 +178,7 @@ export const EventTable: React.FunctionComponent<IEventTableProps> = ({ translat
                 { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(deeplink(id)), log.info)} disabled={!webLink}><ContentElement body={title(subject, notitle)} type="text" filter={filter} /></Link> },
                 { key: 'o', truncateContent: true, content: organizerWithAttendeeTooltip(organizerName, organizerMail, unknownUserDisplayName, attendees) },
                 { key: 't', truncateContent: false, content: stContent(start, end, isAllDay) },
-                { key: 'c', truncateContent: true, content: <ContentElement body={body} type={type} filter={filter} /> }
+                { key: 'c', truncateContent: true, content: <ContentElement body={body} type={type} filter={filter} tooltip={true}/> }
             ],
         });
 

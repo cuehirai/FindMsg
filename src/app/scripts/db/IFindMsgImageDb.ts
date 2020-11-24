@@ -13,4 +13,7 @@ export interface IFindMsgImageDb {
 
     /** Image data */
     data: Blob;
+
+    /** Blobから変換したBase64文字列 */
+    dataUrl: string | null;
 }

@@ -22,6 +22,7 @@ import { AI } from '../appInsights';
 import { getTopLevelMessagesLastSynced } from "../db/Sync";
 import { ICommonMessage } from "../i18n/ICommonMessage";
 import { getChannelMap, IChannelInfo } from "../ui-jsx";
+import { db } from "../db/Database";
 
 
 export declare type MyTeam = IFindMsgTeam & { channels: IFindMsgChannel[] };
@@ -114,8 +115,9 @@ export interface ISearchTabTranslation {
 
 
 const lastSyncedKey = "FindMsgSearch_last_synced";
-const loadLastSynced = (): Date => du.parseISO(localStorage.getItem(lastSyncedKey) ?? "");
-const storeLastSynced = (m: Date): void => localStorage.setItem(lastSyncedKey, du.formatISO(m));
+// const loadLastSynced = (): Date => du.parseISO(localStorage.getItem(lastSyncedKey) ?? "");
+// const storeLastSynced = (m: Date): void => localStorage.setItem(lastSyncedKey, du.formatISO(m));
+const storeLastSynced = async (m: Date): Promise<void> => await db.storeLastSync(lastSyncedKey, m, true);
 
 
 interface DateRangeRadioGroupItemProps extends RadioGroupItemProps {
@@ -164,7 +166,8 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
 
             // There is no easy way to determine a value for this based on the sync logic,
             // so do the expedient thing is to use the last time sync was executed in this tab.
-            lastSynced: loadLastSynced(),
+            // lastSynced: loadLastSynced(),
+            lastSynced: du.invalidDate(),
 
             dropdownDisabled: !!(cid && gid),
             teamIdx: 0,
@@ -198,7 +201,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
     public async componentDidMount(): Promise<void> {
         this.updateTheme(this.getQueryVariable("theme"));
 
-        await this.getDataFromDb();
+        // await this.getDataFromDb();
         let { t } = this.state;
 
         if (await this.inTeams(2000)) {
@@ -213,6 +216,8 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                 websiteUrl: location.href,
             });
 
+            db.login(this.msGraphClient, context.loginHint?? "");
+
             t = strings.get(context.locale);
 
             this.initInfo(context);
@@ -225,7 +230,9 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                     loginHint: context.loginHint ?? "",
                 }
             });
- */        } else {
+ */     } else {
+            db.login(this.msGraphClient, this.state.teamsInfo.loginHint);
+            
             this.initInfo();
     /*             this.setState({
                 loginRequired: !haveUserInfo(this.state.teamsInfo.loginHint),
@@ -235,9 +242,10 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                     loginHint: this.state.teamsInfo.loginHint,
                 }
             });
- */        }
+*/      }
 
         document.title = t.search.pageTitle;
+        await this.getDataFromDb();
 
         this.setState({
             askForStoragePermission: !storage.granted() && storage.askForPermission,
@@ -264,7 +272,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
         });
 
         // add lastSynced for top level messages
-        const lastSynced = channelId ? await Sync.getChannelLastSynced(channelId) : getTopLevelMessagesLastSynced();
+        const lastSynced = channelId ? await Sync.getChannelLastSynced(channelId) : await getTopLevelMessagesLastSynced();
 
         let teamIdx: number;
         let channelIdx: number;
@@ -724,7 +732,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
             const [cancel, checkCancel] = cancellation();
 
             this.setState({ syncing: true, syncCancel: cancel, syncCancelled: false, error: "", warning: "" });
-            const result = await Sync.autoSyncAll(this.msGraphClient, true, checkCancel, this.reportProgress, syncProgress);
+            const result = await Sync.autoSyncAll(this.msGraphClient, true, checkCancel, this.reportProgress, syncProgress, false);
             if (result) {
                 lastSynced = du.now();
                 storeLastSynced(lastSynced);
@@ -774,8 +782,11 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
             const searchUserOptions = users.map(({ id, displayName }) => ({ key: id, header: displayName || unknownUserDisplayName }));
 
             const channelMap = await getChannelMap();
+
+            const lastSynced = await getTopLevelMessagesLastSynced();
+
             // this.setState({ teams, checkState: cs, searchUserOptions });
-            this.setState({ teams, searchUserOptions, channelMap });
+            this.setState({ lastSynced, teams, searchUserOptions, channelMap });
         }
         catch (error) {
             AI.trackException({ exception: error });
