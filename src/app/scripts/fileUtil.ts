@@ -1,5 +1,5 @@
 import { Client } from "@microsoft/microsoft-graph-client";
-import { DriveItem, UploadSession } from "@microsoft/microsoft-graph-types-beta";
+import { DriveItem, UploadSession } from "@microsoft/microsoft-graph-types";
 import { getAllPages } from "./graph/getAllPages";
 import * as log from './logger';
 

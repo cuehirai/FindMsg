@@ -1,9 +1,9 @@
 {
-    "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.6/MicrosoftTeams.schema.json",
-    "manifestVersion": "1.6",
+    "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.8/MicrosoftTeams.schema.json",
+    "manifestVersion": "1.8",
     "id": "{{APPLICATION_ID}}",
     "version": "{{VERSION}}",
-    "packageName": "{{PACKAGE_NAME}}",
+    "packageName": "{{APP_NAME}}",
     "localizationInfo": {
       "defaultLanguageTag": "en",
       "additionalLanguages": [{
@@ -13,17 +13,17 @@
     },
     "developer": {
         "name": "Kacoms",
-        "websiteUrl": "https://{{HOSTNAME}}",
+        "websiteUrl": "https://{{HOSTNAME}}/index.html",
         "privacyUrl": "https://{{HOSTNAME}}/privacy.html",
         "termsOfUseUrl": "https://{{HOSTNAME}}/tou.html"
     },
     "name": {
-        "short": "Message Finder",
-        "full": "Message Finder for Microsoft Teams TOPICS and CHATS"
+        "short": "{{PACKAGE_APP_NAME}}",
+        "full": "{{APP_FULL_NAME}}"
     },
     "description": {
-        "short": "Helps you find messages from TOPICS and CHATS.",
-        "full": "This application helps you in finding specific messages by keyword from TOPICS and CHATS in Microsoft Teams."
+        "short": "{{APP_DESCRIPTION}}",
+        "full": "{{APP_DESCRIPTION_FULL}}"
     },
     "icons": {
         "outline": "outline.png",
@@ -32,7 +32,7 @@
     "accentColor": "#D85028",
     "configurableTabs": [
       {
-        "configurationUrl": "https://{{HOSTNAME}}/tasedTopicsTab/config.html?theme={theme}&hint={loginHint}&eid={entityId}&sid={subEntityId}&uid={userObjectId}&l={locale}&gid={groupId}&tid={tid}",
+        "configurationUrl": "https://{{HOSTNAME}}/FindMsgTopicsTab/config.html?theme={theme}&hint={loginHint}&eid={entityId}&sid={subEntityId}&uid={userObjectId}&l={locale}&gid={groupId}&tid={tid}",
         "canUpdateConfiguration": true,
         "scopes": [
           "team"
@@ -44,7 +44,6 @@
             "entityId": "channelMessageSearch",
             "name": "Channel Search",
             "contentUrl": "https://{{HOSTNAME}}/FindMsgSearchTab/?theme={theme}&hint={loginHint}&eid={entityId}&sid={subEntityId}&uid={userObjectId}&l={locale}",
-            "websiteUrl": "https://{{HOSTNAME}}/FindMsgSearchTab/?theme={theme}&hint={loginHint}&eid={entityId}&sid={subEntityId}&uid={userObjectId}&l={locale}",
             "scopes": [
                 "personal"
             ]
@@ -53,7 +52,6 @@
             "entityId": "chatMessageSearch",
             "name": "Chat Search",
             "contentUrl": "https://{{HOSTNAME}}/FindMsgSearchChat/?theme={theme}&hint={loginHint}&eid={entityId}&sid={subEntityId}&uid={userObjectId}&l={locale}",
-            "websiteUrl": "https://{{HOSTNAME}}/FindMsgSearchChat/?theme={theme}&hint={loginHint}&eid={entityId}&sid={subEntityId}&uid={userObjectId}&l={locale}",
             "scopes": [
                 "personal"
             ]
@@ -62,7 +60,6 @@
             "entityId": "topicsDisplay",
             "name": "Channel Topics",
             "contentUrl": "https://{{HOSTNAME}}/FindMsgTopicsTab/?theme={theme}&hint={loginHint}&eid={entityId}&uid={userObjectId}&tid={tid}&l={locale}",
-            "websiteUrl": "https://{{HOSTNAME}}/FindMsgTopicsTab/?theme={theme}&hint={loginHint}&eid={entityId}&uid={userObjectId}&tid={tid}&l={locale}",
             "scopes": [
                 "personal"
             ]
@@ -71,7 +68,6 @@
             "entityId": "scheduleSearch",
             "name": "Schedule Search",
             "contentUrl": "https://{{HOSTNAME}}/FindMsgSearchSchedule/?theme={theme}&hint={loginHint}&eid={entityId}&uid={userObjectId}&tid={tid}&l={locale}",
-            "websiteUrl": "https://{{HOSTNAME}}/FindMsgSearchSchedule/?theme={theme}&hint={loginHint}&eid={entityId}&uid={userObjectId}&tid={tid}&l={locale}",
             "scopes": [
                 "personal"
             ]

@@ -1,38 +1,8 @@
 import { db } from './db/Database';
-import * as log from './logger';
+import { b64toBlob } from './utils';
 
 // this must NOT be an arrow function so that [this] points to the element
 const revoke = function (this: GlobalEventHandlers): void { URL.revokeObjectURL((this as HTMLImageElement).src) };
-
-const b64toBlob = (b64Data: string, sliceSize=512) => {
-    log.info(`▼▼▼ b64toBlob START b64Data: [${b64Data}] ▼▼▼`);
-    let contentType = "";
-    const endpos = b64Data.indexOf(";");
-    if (endpos > 0) {
-        const b64header = b64Data.substring(0, endpos);
-        const start = b64header.indexOf(":") + 1;
-        contentType = b64header.substring(start);
-        log.info(`header [${b64header} start: [${start}] ==> contentType: [${contentType}]`);
-    }
-    const byteCharacters = atob(b64Data.replace(/^.*,/, ""));
-    const byteArrays: BlobPart[] = [];
-  
-    for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
-      const slice = byteCharacters.slice(offset, offset + sliceSize);
-  
-      const byteNumbers = new Array(slice.length);
-      for (let i = 0; i < slice.length; i++) {
-        byteNumbers[i] = slice.charCodeAt(i);
-      }
-  
-      const byteArray = new Uint8Array(byteNumbers);
-      byteArrays.push(byteArray);
-    }
-  
-    const blob = new Blob(byteArrays, {type: contentType});
-    log.info(`▲▲▲ b64toBlob END ▲▲▲`);
-    return blob;
-  }
 
 /**
  * Backing logic for custom html element <graph-image>

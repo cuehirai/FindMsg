@@ -1,4 +1,4 @@
-import { warn, error } from "./logger";
+import { info, warn, error } from "./logger";
 import * as Bowser from "bowser";
 
 
@@ -269,9 +269,9 @@ export const storage = (() => {
 
 
 /** match the URL of an image attached to a channel message */
-const channelMsgContentRex = /^https:\/\/graph\.microsoft\.com\/beta\/teams\/[a-zA-Z0-9-]{36}\/channels\/[^/]+\/messages\/[0-9]+\/(replies\/[0-9]+\/)?hostedContents\//i.compile();
+const channelMsgContentRex = /^https:\/\/graph\.microsoft\.com\/*\/teams\/[a-zA-Z0-9-]{36}\/channels\/[^/]+\/messages\/[0-9]+\/(replies\/[0-9]+\/)?hostedContents\//i.compile();
 /** match the URL of an image attached to a chat message */
-const chatMsgContentRex = /^https:\/\/graph\.microsoft\.com\/beta\/chats\/[^/]+\/messages\/[0-9]+\/hostedContents\//i.compile();
+const chatMsgContentRex = /^https:\/\/graph\.microsoft\.com\/*\/chats\/[^/]+\/messages\/[0-9]+\/hostedContents\//i.compile();
 
 /**
  * Return true, if the URL points to a message hosedContent on ms graph
@@ -325,3 +325,39 @@ export async function hashBlob(content: Blob): Promise<string> {
     const res = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buffer)));
     return res.map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
+/**
+ * base64文字列からBlobを生成します。
+ * @param b64Data FileReader.readAsDataURLでBlobから変換したbase64文字列
+ * @param sliceSize 変換する際に入力をスライスするサイズ※パフォーマンスに影響するらしい(512くらいがベストだそう)
+ */
+export function b64toBlob(b64Data: string, sliceSize=512):Blob {
+    info(`▼▼▼ b64toBlob START b64Data: [${b64Data}] ▼▼▼`);
+    let contentType = "";
+    const endpos = b64Data.indexOf(";");
+    if (endpos > 0) {
+        const b64header = b64Data.substring(0, endpos);
+        const start = b64header.indexOf(":") + 1;
+        contentType = b64header.substring(start);
+        info(`header [${b64header} start: [${start}] ==> contentType: [${contentType}]`);
+    }
+    const byteCharacters = atob(b64Data.replace(/^.*,/, ""));
+    const byteArrays: BlobPart[] = [];
+  
+    for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+      const slice = byteCharacters.slice(offset, offset + sliceSize);
+  
+      const byteNumbers = new Array(slice.length);
+      for (let i = 0; i < slice.length; i++) {
+        byteNumbers[i] = slice.charCodeAt(i);
+      }
+  
+      const byteArray = new Uint8Array(byteNumbers);
+      byteArrays.push(byteArray);
+    }
+  
+    const blob = new Blob(byteArrays, {type: contentType});
+    info(`▲▲▲ b64toBlob END ▲▲▲`);
+    return blob;
+  }
+

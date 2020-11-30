@@ -1,4 +1,4 @@
-import { Team } from '@microsoft/microsoft-graph-types-beta';
+import { Team } from '@microsoft/microsoft-graph-types';
 import { IFindMsgTeam } from './IFindMsgTeam';
 import { IFindMsgTeamDb } from './IFindMsgTeamDb';
 import { IFindMsgChannel } from './IFindMsgChannel';

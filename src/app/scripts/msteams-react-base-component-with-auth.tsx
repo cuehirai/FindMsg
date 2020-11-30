@@ -17,7 +17,7 @@ import { FindMsgChannel, FindMsgTeam, FindMsgUserCache } from "./db";
 import { ICommonMessage } from "./i18n/ICommonMessage";
 import { StoragePermissionIndicator } from "./StoragePermissionIndicator";
 import { StoragePermissionWidget } from "./StoragePermissionWidget";
-import { User } from "@microsoft/microsoft-graph-types-beta";
+import { User } from "@microsoft/microsoft-graph-types";
 import { db } from "./db/Database";
 
 /** ログインユーザのuserPrincipalNameをlocalStorageに保存するキー */
