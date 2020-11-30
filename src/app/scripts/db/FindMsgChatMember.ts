@@ -1,4 +1,4 @@
-import { AadUserConversationMember, ConversationMember } from '@microsoft/microsoft-graph-types-beta';
+import { AadUserConversationMember, ConversationMember } from '@microsoft/microsoft-graph-types';
 import { FindMsgUserCache } from './FindMsgUserCache';
 import { IFindMsgChat } from './IFindMsgChat';
 import { IFindMsgChatMemberDb } from './IFindMsgChatMemberDb';

@@ -1,7 +1,7 @@
 import Dexie from 'dexie';
 import { db, idx } from '../Database';
 import * as du from "../../dateUtils";
-import { BodyType, Event } from "@microsoft/microsoft-graph-types-beta";
+import { BodyType, Event } from "@microsoft/microsoft-graph-types";
 import { FindMsgAttendee, IParseAttendeeArg } from "../Attendee/FindMsgAttendeeEntity";
 import { DbAccessorBaseComponent, ISubEntityFunctionArg, ISyncFunctionArg, OrderByDirection, SubEntityFunction, SubEntytyAllFunction, SyncError } from "../db-accessor-class-base";
 import { IFindMsgEvent } from "./IFindMsgEvent";
@@ -221,17 +221,29 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
 
             const response = await client.api('/me/calendar/events')
             .get();
-            const fetched = await getAllPages<Event>(client, response);
-            fetched.forEach(rec => {
-                log.info(`id:[${rec.id?? "null"}], subject:[${rec.subject?? "null"}], isCancelled:[${rec.isCancelled?? "null"}], organizer:[${rec.organizer? rec.organizer.emailAddress? rec.organizer.emailAddress.name?? "null": "null": "null"}]`);
-            })
+            const fetchedAll = await getAllPages<Event>(client, response);
 
-            if (fetched === null) {
+            if (fetchedAll === null) {
                 if (existingIds.length === 0) {
                     throw new SyncError("Could not sync events");
                 }
             } else {
-                log.info(`API returned [${fetched.length}] events`);
+                let ommitted = 0;
+                const fetched: Array<Event> = [];
+                fetchedAll.forEach(rec => {
+                    let apply = true;
+                    if (rec.seriesMasterId && rec.seriesMasterId != rec.id) {
+                        apply = false;
+                    }
+                    log.info(`id:[${rec.id?? "null"}], subject:[${rec.subject?? "null"}], isCancelled:[${rec.isCancelled?? "null"}], organizer:[${rec.organizer? rec.organizer.emailAddress? rec.organizer.emailAddress.name?? "null": "null": "null"}], apply:[${apply}]`);
+                    if (apply) {
+                        fetched.push(rec);
+                    } else {
+                        ommitted += 1;
+                    }
+                })
+
+                log.info(`API returned [${fetched.length}] events (${ommitted} records ommitted due to being recurrence data)`);
                 await db.transaction("rw", db.events, db.attendees, async () => {
                     const events = await Promise.all(fetched.map(event => this.parseApi(event as A)));
                     let count = 0;

@@ -1,5 +1,5 @@
 import Dexie from 'dexie';
-import { Entity, ChatMessage, Team, Channel, Chat, ConversationMember } from '@microsoft/microsoft-graph-types-beta';
+import { Entity, ChatMessage, Team, Channel, Chat, ConversationMember } from '@microsoft/microsoft-graph-types';
 import { Client, ResponseType } from '@microsoft/microsoft-graph-client';
 import { IFindMsgTeam } from './IFindMsgTeam';
 import { IFindMsgChannel } from './IFindMsgChannel';
@@ -292,7 +292,8 @@ export class Sync {
 
     private static async fetchTeamList(client: Client): Promise<Team[] | null> {
         try {
-            const response = await client.api('/me/joinedTeams').version('beta').get();
+            // const response = await client.api('/me/joinedTeams').version('beta').get();
+            const response = await client.api('/me/joinedTeams').get();
             const fetchedTeams = await getAllPages<Team>(client, response);
 
             log.info(`API returned [${fetchedTeams.length}] teams`);
@@ -341,7 +342,8 @@ export class Sync {
 
     private static async fetchChannelList(client: Client, team: IFindMsgTeam): Promise<Channel[] | null> {
         try {
-            const response = await client.api(`/teams/${team.id}/channels`).version('beta').get();
+            // const response = await client.api(`/teams/${team.id}/channels`).version('beta').get();
+            const response = await client.api(`/teams/${team.id}/channels`).version('v1.0').get();
             return await getAllPages<Channel>(client, response);
         } catch (error) {
             AI.trackException({
@@ -473,8 +475,9 @@ export class Sync {
         const cutOffTime = du.now();
 
         const response = await client.api(`/teams/${channel.teamId}/channels/${channel.id}/messages`)
-            .version('beta')
-            .top(100) // maximum of 100 for this resource. Will still likely only return 50.
+            .version('v1.0')
+            // .top(100) // maximum of 100 for this resource. Will still likely only return 50.
+            .top(50) // maximum of 100 for this resource. Will still likely only return 50.
             .get();
 
         // delete all the old messages once the first request to graph succeeds
@@ -559,8 +562,9 @@ export class Sync {
          */
         for (const m of messages) {
             const response = await client.api(`/teams/${channel.teamId}/channels/${channel.id}/messages/${m.id}/replies`)
-                .version('beta')
-                .top(100) // exceeding 100 gives http 400
+                .version('v1.0')
+                // .top(100) // exceeding 100 gives http 400
+                .top(50) // exceeding 100 gives http 400
                 .get();
 
             // this assumes, that a message has a reasonably small number of replies

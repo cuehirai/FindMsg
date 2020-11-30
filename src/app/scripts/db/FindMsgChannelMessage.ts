@@ -1,6 +1,6 @@
 import Dexie from 'dexie';
 import * as du from "../dateUtils";
-import { ChatMessage, BodyType } from '@microsoft/microsoft-graph-types-beta';
+import { ChatMessage, BodyType } from '@microsoft/microsoft-graph-types';
 import { IFindMsgChannel } from './IFindMsgChannel';
 import { IFindMsgChannelMessage } from './IFindMsgChannelMessage';
 import { IFindMsgChannelMessageDb } from './IFindMsgChannelMessageDb';

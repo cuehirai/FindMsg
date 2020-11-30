@@ -1,6 +1,6 @@
 {
-  "name": "FindMsg",
-  "version": "0.4.0",
+  "name": "findmsg",
+  "version": "0.4.1",
   "description": "Kacoms custom search and topics",
   "scripts": {
     "start": "node dist/server.js",
@@ -36,7 +36,7 @@
     "react-dom": "^16.13.1"
   },
   "devDependencies": {
-    "@microsoft/microsoft-graph-types": "^1.22.0",
+    "@microsoft/microsoft-graph-types": "^1.27.0",
     "@microsoft/microsoft-graph-types-beta": "github:microsoftgraph/msgraph-typescript-typings#beta",
     "@types/debug": "4.1.5",
     "@types/dompurify": "^2.0.4",

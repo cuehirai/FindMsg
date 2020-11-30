@@ -1,6 +1,6 @@
 import { db, idx } from '../Database';
 import * as du from "../../dateUtils";
-import { Attendee, ResponseType } from "@microsoft/microsoft-graph-types-beta";
+import { Attendee, ResponseType } from "@microsoft/microsoft-graph-types";
 import { DbAccessorBaseComponent, ISubEntityFunctionArg, ISyncFunctionArg, SubEntityFunction, SubEntytyAllFunction } from "../db-accessor-class-base";
 import { IFindMsgAttendeeDb } from "./IFindMsgAttendeeDb";
 import { IFindMsgAttendee } from "./IFindMsgAttendee";

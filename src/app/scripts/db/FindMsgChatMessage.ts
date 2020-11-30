@@ -1,5 +1,5 @@
 import * as du from "../dateUtils";
-import { ChatMessage, BodyType } from '@microsoft/microsoft-graph-types-beta';
+import { ChatMessage, BodyType } from '@microsoft/microsoft-graph-types';
 import { IFindMsgChat } from './IFindMsgChat';
 import { IFindMsgChatMessage } from './IFindMsgChatMessage';
 import { IFindMsgChatMessageDb } from './IFindMsgChatMessageDb';
