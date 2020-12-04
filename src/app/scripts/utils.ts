@@ -269,9 +269,9 @@ export const storage = (() => {
 
 
 /** match the URL of an image attached to a channel message */
-const channelMsgContentRex = /^https:\/\/graph\.microsoft\.com\/*\/teams\/[a-zA-Z0-9-]{36}\/channels\/[^/]+\/messages\/[0-9]+\/(replies\/[0-9]+\/)?hostedContents\//i.compile();
+const channelMsgContentRex = /^https:\/\/graph\.microsoft\.com\/.*\/teams\/[a-zA-Z0-9-]{36}\/channels\/[^/]+\/messages\/[0-9]+\/(replies\/[0-9]+\/)?hostedContents\//i.compile();
 /** match the URL of an image attached to a chat message */
-const chatMsgContentRex = /^https:\/\/graph\.microsoft\.com\/*\/chats\/[^/]+\/messages\/[0-9]+\/hostedContents\//i.compile();
+const chatMsgContentRex = /^https:\/\/graph\.microsoft\.com\/.*\/chats\/[^/]+\/messages\/[0-9]+\/hostedContents\//i.compile();
 
 /**
  * Return true, if the URL points to a message hosedContent on ms graph
@@ -327,6 +327,27 @@ export async function hashBlob(content: Blob): Promise<string> {
 }
 
 /**
+ * BlobをDataUrlに変換
+ * @param blob 
+ */
+export async function blob2dataUrl(blob: Blob): Promise<string> {
+    const fr = new FileReader();
+    fr.readAsDataURL(blob);
+ 
+    return new Promise<string>(function (resolve, reject) {
+        fr.onload = fr.onerror = function (evt) {
+            fr.onload = fr.onerror = null;
+ 
+            if (evt.type === 'load' && typeof fr.result == 'string') {
+                resolve(fr.result);
+            } else {
+                reject(new Error('Failed to read the blob'))
+            }
+        }
+    });
+ }
+ 
+/**
  * base64文字列からBlobを生成します。
  * @param b64Data FileReader.readAsDataURLでBlobから変換したbase64文字列
  * @param sliceSize 変換する際に入力をスライスするサイズ※パフォーマンスに影響するらしい(512くらいがベストだそう)
@@ -359,5 +380,5 @@ export function b64toBlob(b64Data: string, sliceSize=512):Blob {
     const blob = new Blob(byteArrays, {type: contentType});
     info(`▲▲▲ b64toBlob END ▲▲▲`);
     return blob;
-  }
+}
 

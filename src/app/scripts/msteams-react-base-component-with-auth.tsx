@@ -19,6 +19,7 @@ import { StoragePermissionIndicator } from "./StoragePermissionIndicator";
 import { StoragePermissionWidget } from "./StoragePermissionWidget";
 import { User } from "@microsoft/microsoft-graph-types";
 import { db } from "./db/Database";
+import { getInformation } from "./ui-jsx";
 
 /** ログインユーザのuserPrincipalNameをlocalStorageに保存するキー */
 export const currentLoginHintKey = `${process.env.PACKAGE_NAME}MyLoginHint`;
@@ -203,6 +204,11 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
     }
 
     /**
+     * このページのトップにおしらせを表示するかどうかを宣言してください。
+     */
+    protected abstract showInformation: boolean;
+
+    /**
      * このページでマイクロソフトのログインが必要かどうかを宣言してください。
      */
     protected abstract requireMicrosoftLogin: boolean;
@@ -357,11 +363,14 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         const contentTop = this.renderContentTop();
         const content = this.renderContent();
         const contentBottom = this.renderContentBottom();
+        const {hasInfo, info} = getInformation(this.showInformation);
 
         const res:JSX.Element = (
             <Provider theme={theme}>
                 <Page>
                     {this.requireMicrosoftLogin && loginDialog}
+
+                    {hasInfo && info}
 
                     {contentTop}
 

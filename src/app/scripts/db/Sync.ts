@@ -5,7 +5,7 @@ import { IFindMsgTeam } from './IFindMsgTeam';
 import { IFindMsgChannel } from './IFindMsgChannel';
 import { IFindMsgChannelMessage } from './IFindMsgChannelMessage';
 import * as log from '../logger';
-import { throwFn, nop, progressFn, filterNull, OperationCancelled, assert, hashBlob, isGraphHostedContentUrl } from '../utils';
+import { throwFn, nop, progressFn, filterNull, OperationCancelled, assert, hashBlob, isGraphHostedContentUrl, blob2dataUrl } from '../utils';
 import { getAllPages } from "../graph/getAllPages";
 import { FullPageIterator } from '../graph/FullPageIterator';
 import { FindMsgTeam } from './FindMsgTeam';
@@ -119,7 +119,7 @@ const teamSyncKey = "FindMsg_teams_last_synced";
 const getTeamsLastSynced = async (): Promise<Date> => await db.getLastSync(teamSyncKey);
 const setTeamsLastSynced = async (ts: Date) => await db.storeLastSync(teamSyncKey, ts);
 
-const topLevelMessagesSyncKey = "FindMsg_toplevel_messages_last_synced";
+export const topLevelMessagesSyncKey = "FindMsg_toplevel_messages_last_synced";
 // export const getTopLevelMessagesLastSynced = (): Date => du.parseISO(localStorage.getItem(topLevelMessagesSyncKey) ?? "");
 // const setTopLevelMessagesLastSynced = (ts: Date) => localStorage.setItem(topLevelMessagesSyncKey, du.formatISO(ts));
 export const getTopLevelMessagesLastSynced = async (): Promise<Date> => await db.getLastSync(topLevelMessagesSyncKey);
@@ -342,8 +342,8 @@ export class Sync {
 
     private static async fetchChannelList(client: Client, team: IFindMsgTeam): Promise<Channel[] | null> {
         try {
-            // const response = await client.api(`/teams/${team.id}/channels`).version('beta').get();
-            const response = await client.api(`/teams/${team.id}/channels`).version('v1.0').get();
+            const response = await client.api(`/teams/${team.id}/channels`).version('beta').get();
+            // const response = await client.api(`/teams/${team.id}/channels`).version('v1.0').get();
             return await getAllPages<Channel>(client, response);
         } catch (error) {
             AI.trackException({
@@ -475,9 +475,10 @@ export class Sync {
         const cutOffTime = du.now();
 
         const response = await client.api(`/teams/${channel.teamId}/channels/${channel.id}/messages`)
-            .version('v1.0')
-            // .top(100) // maximum of 100 for this resource. Will still likely only return 50.
-            .top(50) // maximum of 100 for this resource. Will still likely only return 50.
+            .version('beta')
+            // .version('v1.0')
+            .top(100) // maximum of 100 for this resource. Will still likely only return 50.
+            // .top(50) // maximum of 100 for this resource. Will still likely only return 50.
             .get();
 
         // delete all the old messages once the first request to graph succeeds
@@ -562,9 +563,10 @@ export class Sync {
          */
         for (const m of messages) {
             const response = await client.api(`/teams/${channel.teamId}/channels/${channel.id}/messages/${m.id}/replies`)
-                .version('v1.0')
-                // .top(100) // exceeding 100 gives http 400
-                .top(50) // exceeding 100 gives http 400
+                .version('beta')
+                // .version('v1.0')
+                .top(100) // exceeding 100 gives http 400
+                // .top(50) // exceeding 100 gives http 400
                 .get();
 
             // this assumes, that a message has a reasonably small number of replies
@@ -871,41 +873,41 @@ export class Sync {
         log.info(`▼▼▼ getHostedImages START ▼▼▼`);
         const msgMaps: Array<IMsgMap> = [];
 
-        const onloadCallBack = async (reader: FileReader, imgrec: IImageMap, parent: IMsgMap) => {
-            // log.info(`★★★★★★★★★★ reader.onLoad start for id: [${imgrec.id}] ★★★★★★★★★★`);
-            const result = reader.result;
-            if (result && typeof result == 'string') {
-                imgrec.dataUrl = result;
-            }
+        // const onloadCallBack = async (reader: FileReader, imgrec: IImageMap, parent: IMsgMap) => {
+        //     // log.info(`★★★★★★★★★★ reader.onLoad start for id: [${imgrec.id}] ★★★★★★★★★★`);
+        //     const result = reader.result;
+        //     if (result && typeof result == 'string') {
+        //         imgrec.dataUrl = result;
+        //     }
 
-            await db.images.put({
-                id:imgrec.id, 
-                data: imgrec.data, 
-                srcUrl: imgrec.srcUrl,
-                fetched: imgrec.fetched,
-                dataUrl: imgrec.dataUrl,
-            });
+        //     await db.images.put({
+        //         id:imgrec.id, 
+        //         data: imgrec.data, 
+        //         srcUrl: imgrec.srcUrl,
+        //         fetched: imgrec.fetched,
+        //         dataUrl: imgrec.dataUrl,
+        //     });
 
-            const gimg = document.createElement("graph-image") as GraphImage;
-            gimg.src = imgrec.id;
-            imgrec.image.replaceWith(gimg);
+        //     const gimg = document.createElement("graph-image") as GraphImage;
+        //     gimg.src = imgrec.id;
+        //     imgrec.image.replaceWith(gimg);
 
-            imgrec.done = true;
+        //     imgrec.done = true;
 
-            let chkMsg = true;
-            for (let j = 0; j < parent.images.length; j++) {
-                const imgRec = parent.images[j];
-                // log.info(`★★★★★★★★★★ checking images[${j}] => done? [${imgRec.done}] ★★★★★★★★★★`);
-                if (!imgRec.done) {
-                    // 一つでも未処理のイメージがあれば未完了とする
-                    chkMsg = false;
-                }
-            }
+        //     let chkMsg = true;
+        //     for (let j = 0; j < parent.images.length; j++) {
+        //         const imgRec = parent.images[j];
+        //         // log.info(`★★★★★★★★★★ checking images[${j}] => done? [${imgRec.done}] ★★★★★★★★★★`);
+        //         if (!imgRec.done) {
+        //             // 一つでも未処理のイメージがあれば未完了とする
+        //             chkMsg = false;
+        //         }
+        //     }
             
-            if (chkMsg) {
-                await process(parent);
-            }
-        }
+        //     if (chkMsg) {
+        //         await process(parent);
+        //     }
+        // }
 
         const process = async (msgmap: IMsgMap) => {
             // msgmap.hasImage && log.info(`★★★★★★★★★★ getHostedImages body(before): [${msgmap.msg.body}] ★★★★★★★★★★`);
@@ -921,26 +923,26 @@ export class Sync {
             msgmap.completed = true;
         };
 
-        const check = () => {
-            const checker = setInterval( function() {
-                // log.info(`★★★★★★★★★★ check process start ★★★★★★★★★★`);
-                let done = true;
-                // すべてのメッセージが処理済みかどうかをチェック
-                for (let i = 0; i < msgMaps.length; i++) {
-                    const rec = msgMaps[i];
-                    // log.info(`★★★★★★★★★★ checking msgMaps[${i}] => completed? [${rec.completed}] ★★★★★★★★★★`);
-                    if (!rec.completed) {
-                        done = false;
-                        break;
-                    }
+        // const check = () => {
+        //     const checker = setInterval( function() {
+        //         // log.info(`★★★★★★★★★★ check process start ★★★★★★★★★★`);
+        //         let done = true;
+        //         // すべてのメッセージが処理済みかどうかをチェック
+        //         for (let i = 0; i < msgMaps.length; i++) {
+        //             const rec = msgMaps[i];
+        //             // log.info(`★★★★★★★★★★ checking msgMaps[${i}] => completed? [${rec.completed}] ★★★★★★★★★★`);
+        //             if (!rec.completed) {
+        //                 done = false;
+        //                 break;
+        //             }
 
-                }
-                // log.info(`★★★★★★★★★★ check process end... done? [${done}] ★★★★★★★★★★`);
-                if (done) {
-                    clearInterval(checker);
-                }
-            }, 10);
-        };
+        //         }
+        //         // log.info(`★★★★★★★★★★ check process end... done? [${done}] ★★★★★★★★★★`);
+        //         if (done) {
+        //             clearInterval(checker);
+        //         }
+        //     }, 10);
+        // };
 
         // let withImage = 0;
         // let withoutImage = 0;
@@ -1025,22 +1027,34 @@ export class Sync {
 
         // log.info(`★★★★★★★★★★ HTML Message count: [${msgMaps.length}] withImage: [${withImage}] withoutImage:[${withoutImage}] ★★★★★★★★★★`);
 
-        check();
+        // check();
 
         const processImage = async (rec: IMsgMap) => {
             if (!rec.hasImage) {
                 await process(rec);
             } else {
-                rec.images.forEach(imgrec => {
-                    // log.info(`★★★★★★★★★★ Image processing start for id: [${imgrec.id}] ★★★★★★★★★★`);
-                    const reader = new FileReader;
-                    reader.onload = async () => {
-                        await onloadCallBack(reader, imgrec, rec);
-                    };
+                rec.images.forEach(async imgrec => {
+                    // // log.info(`★★★★★★★★★★ Image processing start for id: [${imgrec.id}] ★★★★★★★★★★`);
+                    // const reader = new FileReader;
+                    // reader.onload = async () => {
+                    //     await onloadCallBack(reader, imgrec, rec);
+                    // };
 
-                    reader.readAsDataURL(imgrec.data);
-                    // log.info(`★★★★★★★★★★ Image processing end for id: [${imgrec.id}] ★★★★★★★★★★`);
+                    // reader.readAsDataURL(imgrec.data);
+                    // // log.info(`★★★★★★★★★★ Image processing end for id: [${imgrec.id}] ★★★★★★★★★★`);
+                    const dataUrl = await blob2dataUrl(imgrec.data);
+                    await db.images.put({
+                        id:imgrec.id, 
+                        data: imgrec.data, 
+                        srcUrl: imgrec.srcUrl,
+                        fetched: imgrec.fetched,
+                        dataUrl: dataUrl,
+                    });
+                    const gimg = document.createElement("graph-image") as GraphImage;
+                    gimg.src = imgrec.id;
+                    imgrec.image.replaceWith(gimg);
                 })
+                await process(rec);
             }
         };
 

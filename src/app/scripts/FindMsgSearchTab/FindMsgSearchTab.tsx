@@ -21,7 +21,7 @@ import { StoragePermissionIndicator } from "../StoragePermissionIndicator";
 import { AI } from '../appInsights';
 import { getTopLevelMessagesLastSynced } from "../db/Sync";
 import { ICommonMessage } from "../i18n/ICommonMessage";
-import { getChannelMap, IChannelInfo } from "../ui-jsx";
+import { getChannelMap, getInformation, IChannelInfo } from "../ui-jsx";
 import { db } from "../db/Database";
 
 
@@ -461,6 +461,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
             warning,
             channelMap,
         } = this.state;
+        const {hasInfo, info} = getInformation();
 
         return (
             <Provider theme={theme}>
@@ -480,6 +481,8 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                         onConfirm={this.login}
                         content={authResult?.message}
                     />
+
+                    {hasInfo && info}
 
                     <Flex space="between">
                         <Header content={header} style={{ marginBlockStart: 0, marginBlockEnd: 0 }} />
@@ -733,14 +736,18 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
 
             this.setState({ syncing: true, syncCancel: cancel, syncCancelled: false, error: "", warning: "" });
             const result = await Sync.autoSyncAll(this.msGraphClient, true, checkCancel, this.reportProgress, syncProgress, false);
-            if (result) {
-                lastSynced = du.now();
-                storeLastSynced(lastSynced);
-            } else {
+            // if (result) {
+            //     lastSynced = du.now();
+            //     storeLastSynced(lastSynced);
+            // } else {
+            //     AI.trackEvent({ name: "syncProblem" });
+            //     this.setState({ warning: syncProgress.syncProblem });
+            // }
+            // await this.getDataFromDb();
+            if (!result) {
                 AI.trackEvent({ name: "syncProblem" });
                 this.setState({ warning: syncProgress.syncProblem });
             }
-            await this.getDataFromDb();
         } catch (error) {
             if (error instanceof OperationCancelled) {
                 log.info("sync messages cancelled");
@@ -749,6 +756,9 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                 this.setError(error, this.state.t.error.syncFailed);
             }
         } finally {
+            lastSynced = du.now();
+            storeLastSynced(lastSynced);
+            await this.getDataFromDb();
             this.setState({ syncing: false, lastSynced });
         }
     }

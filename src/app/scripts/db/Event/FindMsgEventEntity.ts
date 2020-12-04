@@ -42,7 +42,8 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
 
     // デルタクエリは開始日と終了日の範囲指定でイベントを抽出してくれるだけなので
     // 削除されたイベントを掃除することができない＝＞デルタはサポートしないことにする
-    isDeltaSyncAvailable = false;
+    // ・・・と思ったけどやっぱりサポートする=>ただし最終同期-1カ月からの再取得とする
+    isDeltaSyncAvailable = true;
     
     parseApi = async (api: A): Promise<T | null> => {
         let res: IFindMsgEvent | null = null;
@@ -295,14 +296,14 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
         if (!du.isValid(last)) {
             throw new Error("last delta sync invalid");
         }
-        if (du.isBefore(last, du.subDays(du.subMonths(du.now(), 7), 1))) {
+        if (du.isBefore(last, du.subDays(du.subMonths(du.now(), 6), 1))) {
             throw new Error("last delta sync too old");
         }
 
         try {
             arg.progress(arg.translate.common.syncEntity(arg.translate.entities.events));
 
-            const cutOffTime = du.subMinutes(last, 5);
+            const cutOffTime = du.subMonths(last, 1);
             const endtime = du.now();
             endtime.setFullYear(endtime.getFullYear() + 1);
 
