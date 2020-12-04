@@ -16,8 +16,8 @@ import { invalidDate } from "../dateUtils";
 import * as strings from '../i18n/messages';
 import { IMessageTranslation } from "../i18n/IMessageTranslation";
 import { AI } from '../appInsights';
-import { getTopLevelMessagesLastSynced } from "../db/Sync";
-import { getChannelMap, IChannelInfo } from "../ui-jsx";
+import { getTopLevelMessagesLastSynced, topLevelMessagesSyncKey } from "../db/Sync";
+import { getChannelMap, getInformation, IChannelInfo } from "../ui-jsx";
 import { db } from "../db/Database";
 
 
@@ -363,6 +363,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             },
             channelMap,
         } = this.state;
+        const {hasInfo, info} = getInformation();
 
         return (
             <Provider theme={theme}>
@@ -383,6 +384,8 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
                         content={authResult?.message}
                     />
 
+                    {hasInfo && info}
+                    
                     <Segment>
                         <Flex gap="gap.large">
                             <Flex.Item shrink={2}>
@@ -521,6 +524,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
                 t: { syncProgress }
             } = this.state;
             const [cancel, throwfn] = cancellation();
+            log.info(`■■■■■ syncMessages START... groupId: [${groupId}] channelId: [${channelId}] ■■■■■`);
 
             this.setState({ syncing: true, syncCancel: cancel, syncCancelled: false, error: "", warning: "" });
             let syncResult: boolean;
@@ -531,7 +535,11 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             }
 
             if (syncResult) {
-                lastSynced = (await Sync.getChannelLastSynced(channelId));
+                if (groupId && channelId) {
+                    lastSynced = (await Sync.getChannelLastSynced(channelId));                    
+                } else {
+                    lastSynced = await db.getLastSync(topLevelMessagesSyncKey);
+                }
             } else {
                 AI.trackEvent({ name: "syncProblem" });
                 this.setState({ warning: syncProgress.syncProblem });

@@ -22,6 +22,7 @@ interface IFindMsgIndexState extends IMyOwnState {
 
 
 export class FindMsgIndex extends TeamsBaseComponentWithAuth {
+    protected showInformation = false;
     protected async setAdditionalState(newstate: ITeamsAuthComponentState, context?: microsoftTeams.Context, inTeams?: boolean): Promise<void> {
         if (context && inTeams? true : false) {
             log.info(`★★★ setAdditionalState is called from componentDidMount; hosted in teams ★★★`);

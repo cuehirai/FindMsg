@@ -58,6 +58,7 @@ interface ISavedState {
  * スケジュール検索コンポーネント
  */
 export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
+    protected showInformation = true;
     protected async setAdditionalState(newstate: ITeamsAuthComponentState, context?: microsoftTeams.Context, inTeams?: boolean): Promise<void> {
         if (context && inTeams? true : false) {
             log.info(`★★★ setAdditionalState is called from componentDidMount; hosted in teams ★★★`);

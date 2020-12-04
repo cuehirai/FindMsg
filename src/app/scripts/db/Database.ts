@@ -336,16 +336,30 @@ class Database extends Dexie {
                 return res? du.parseISO(res) : du.invalidDate();
             };
 
-            const latest = (lastExport() > lastImport())? lastExport() : lastImport();
+            // const latest = (lastExport() > lastImport())? lastExport() : lastImport();
+            let latest = du.invalidDate();
+            if (du.isValid(lastExport())) {
+                if (du.isValid(lastImport())) {
+                    latest = (lastExport() > lastImport())? lastExport() : lastImport();
+                } else {
+                    latest = lastExport();
+                }
+            } else {
+                if (du.isValid(lastImport())) {
+                    latest = lastImport();
+                }
+            }
             
             const file = await FileUtil.getFile(client, this.exportfileName(), this.exportfilePath());
             if (file) {
                 const lastModified = file.lastModifiedDateTime? du.parseISO(file.lastModifiedDateTime) : du.invalidDate();
 
                 info(`★★★ lastExport:[${lastExport()}] lastImport:[${lastImport()}] lastModified:[${lastModified}] ★★★`);
-                if (lastModified > latest) {
+                if (!du.isValid(latest) || lastModified > latest) {
+                    info(`★★★ executing db import!! ★★★`);
                     res = await this.import();
                 } else {
+                    info(`★★★ should be no need to import ★★★`);
                     res = true;
                 }
             } else {
@@ -386,7 +400,7 @@ class Database extends Dexie {
         if (doExport?? false) {
             // 最終同期日時は常にエクスポートファイルの最終更新日時より古くなるのでエクスポートの引数としては使用しない
             // ※同一ユーザが使い続けているのに、タブを選択するたびにインポートが必要と判断されてしまうため
-            await this.export();
+            this.export();
         }
         info(`▲▲▲ storeLastSync END... ID: [${id}] ▲▲▲`);
     }

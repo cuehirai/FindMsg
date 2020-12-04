@@ -237,7 +237,7 @@ export abstract class DbAccessorBaseComponent<D extends IDbEntityBase, T extends
         const neverSynced = !du.isValid(lastSync);
 
         // can only get messages in the last 8 months via delta endpoint, but add margin of error
-        const canUseDelta = du.isValid(lastSync) && du.isAfter(lastSync, du.subMonths(du.now(), 7));
+        const canUseDelta = du.isValid(lastSync) && du.isAfter(lastSync, du.subMonths(du.now(), 6));
 
         const needFullSync = !this.isDeltaSyncAvailable || neverSynced || !canUseDelta;
         log.info(`full: [${du.isValid(lastSync) ? lastSync.toISOString() : "invalid"}], neverSynced: [${neverSynced}], canUseDelta: [${canUseDelta}]`);

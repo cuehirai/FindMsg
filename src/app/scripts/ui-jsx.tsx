@@ -3,6 +3,7 @@ import { Chip, Tooltip, withStyles } from "@material-ui/core";
 import { highlightNode, collapse, empty } from "./highlight";
 import { collapseConsecutiveChar, sanitize, stripHtml } from "./purify";
 import { FindMsgChannel, FindMsgTeam } from "./db";
+import * as log from './logger';
 
 /**
  * コンテンツコンポーネント用プロパティ
@@ -121,4 +122,36 @@ export const getChannelMap = async (): Promise<Map<string, IChannelInfo>> => {
         }
     })
     return channelMap;
+}
+
+
+export const getInformation = (showInfo?: boolean): {hasInfo: boolean, info: JSX.Element} => {
+    let res = {hasInfo: false, info: (<div/>)};
+    try {
+        if (showInfo?? true) {
+            const request = new XMLHttpRequest();
+            const downloadUrl = `https://${location.hostname}/information.txt`
+            log.info(`requesting for information: url [${downloadUrl}]`);
+            request.open("GET", downloadUrl, false);
+            request.send();
+            if (request.status < 300) {
+                const text = request.response;
+                log.info(`information found...content size: [${text.length}]`);
+                if (text.length > 0) {
+                    res = 
+                        {hasInfo: true,
+                            info: (<div style={{ width: '100%', maxHeight: 100, overflow: "scroll", 
+                                    borderWidth: "medium", borderColor: "lightyellow", borderStyle: "solid"}}>
+                                    <span dangerouslySetInnerHTML = {{__html: text.toString("utf-8")}} />
+                            </div>)
+                        };
+                }
+            } else {
+                log.warn(`failed to read information: (${request.status}) [${request.statusText}]`)
+            }
+        }
+    } catch (e) {
+        log.warn(`failed to read information: [${e}]`);
+    }
+    return res;
 }
