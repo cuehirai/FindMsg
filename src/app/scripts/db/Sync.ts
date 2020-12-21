@@ -5,7 +5,7 @@ import { IFindMsgTeam } from './IFindMsgTeam';
 import { IFindMsgChannel } from './IFindMsgChannel';
 import { IFindMsgChannelMessage } from './IFindMsgChannelMessage';
 import * as log from '../logger';
-import { throwFn, nop, progressFn, filterNull, OperationCancelled, assert, hashBlob, isGraphHostedContentUrl, blob2dataUrl } from '../utils';
+import { throwFn, nop, progressFn, filterNull, OperationCancelled, assert, hashBlob, isGraphHostedContentUrl } from '../utils';
 import { getAllPages } from "../graph/getAllPages";
 import { FullPageIterator } from '../graph/FullPageIterator';
 import { FindMsgTeam } from './FindMsgTeam';
@@ -21,7 +21,8 @@ import { FindMsgChatMessage } from './FindMsgChatMessage';
 import { FindMsgChatMember } from './FindMsgChatMember';
 import { IFindMsgChatMessage } from './IFindMsgChatMessage';
 import { GraphImage } from '../graphImage';
-import { IFindMsgImageDb } from './IFindMsgImageDb';
+import { IImageDb } from './Image/IImageDb';
+import { ImageTable } from './Image/ImageEntity';
 
 /*
 Sync design notes:
@@ -575,11 +576,13 @@ export class Sync {
 
             log.info(`API returned ${replies.length} replies for message [${m.id}]`);
 
+            const msgs: Array<IFindMsgChannelMessage> = []
             await db.transaction("rw", db.channelMessages, db.users, async () => {
                 m.synced = now;
                 await FindMsgChannelMessage.put(m);
-                await FindMsgChannelMessage.putAll(replies, channel);
+                (await FindMsgChannelMessage.putAll(replies, channel)).forEach(msg => msgs.push(msg));
             });
+            await Sync.getHostedImages(client, msgs);
         }
 
         // indicate how many messages where actually processed
@@ -871,212 +874,52 @@ export class Sync {
      */
     private static async getHostedImages(client: Client, messages: (IFindMsgChatMessage | IFindMsgChannelMessage)[]) {
         log.info(`▼▼▼ getHostedImages START ▼▼▼`);
-        const msgMaps: Array<IMsgMap> = [];
-
-        // const onloadCallBack = async (reader: FileReader, imgrec: IImageMap, parent: IMsgMap) => {
-        //     // log.info(`★★★★★★★★★★ reader.onLoad start for id: [${imgrec.id}] ★★★★★★★★★★`);
-        //     const result = reader.result;
-        //     if (result && typeof result == 'string') {
-        //         imgrec.dataUrl = result;
-        //     }
-
-        //     await db.images.put({
-        //         id:imgrec.id, 
-        //         data: imgrec.data, 
-        //         srcUrl: imgrec.srcUrl,
-        //         fetched: imgrec.fetched,
-        //         dataUrl: imgrec.dataUrl,
-        //     });
-
-        //     const gimg = document.createElement("graph-image") as GraphImage;
-        //     gimg.src = imgrec.id;
-        //     imgrec.image.replaceWith(gimg);
-
-        //     imgrec.done = true;
-
-        //     let chkMsg = true;
-        //     for (let j = 0; j < parent.images.length; j++) {
-        //         const imgRec = parent.images[j];
-        //         // log.info(`★★★★★★★★★★ checking images[${j}] => done? [${imgRec.done}] ★★★★★★★★★★`);
-        //         if (!imgRec.done) {
-        //             // 一つでも未処理のイメージがあれば未完了とする
-        //             chkMsg = false;
-        //         }
-        //     }
-            
-        //     if (chkMsg) {
-        //         await process(parent);
-        //     }
-        // }
-
-        const process = async (msgmap: IMsgMap) => {
-            // msgmap.hasImage && log.info(`★★★★★★★★★★ getHostedImages body(before): [${msgmap.msg.body}] ★★★★★★★★★★`);
-            msgmap.msg.body = msgmap.tmpl.innerHTML;
-            // msgmap.hasImage && log.info(`★★★★★★★★★★ getHostedImages body(after): [${msgmap.msg.body}] ★★★★★★★★★★`);
-
-            if ('chatId' in msgmap.msg) {
-                await FindMsgChatMessage.put(msgmap.msg);
-            } else {
-                await FindMsgChannelMessage.put(msgmap.msg);
-            }
-
-            msgmap.completed = true;
-        };
-
-        // const check = () => {
-        //     const checker = setInterval( function() {
-        //         // log.info(`★★★★★★★★★★ check process start ★★★★★★★★★★`);
-        //         let done = true;
-        //         // すべてのメッセージが処理済みかどうかをチェック
-        //         for (let i = 0; i < msgMaps.length; i++) {
-        //             const rec = msgMaps[i];
-        //             // log.info(`★★★★★★★★★★ checking msgMaps[${i}] => completed? [${rec.completed}] ★★★★★★★★★★`);
-        //             if (!rec.completed) {
-        //                 done = false;
-        //                 break;
-        //             }
-
-        //         }
-        //         // log.info(`★★★★★★★★★★ check process end... done? [${done}] ★★★★★★★★★★`);
-        //         if (done) {
-        //             clearInterval(checker);
-        //         }
-        //     }, 10);
-        // };
-
-        // let withImage = 0;
-        // let withoutImage = 0;
         for (const msg of messages.filter(m => m.type === "html")) {
             const tmpl = document.createElement("template");
             tmpl.innerHTML = msg.body;
-
-            const msgmap: IMsgMap = {
-                msg: msg,
-                tmpl: tmpl,
-                hasImage: false,
-                completed: false,
-                images: [],
-            };
-            msgMaps.push(msgmap);
 
             for (const image of Array.from(tmpl.content.querySelectorAll("img"))) {
                 const srcUrl = image.src;
 
                 if (isGraphHostedContentUrl(srcUrl)) {
                     try {
-
+                        // Note: download as Blob instead of ArrayBuffer because Blob contains the mime type
                         const data: Blob = await client.api(srcUrl).responseType(ResponseType.BLOB).get();
                         const id = await hashBlob(data);
-                        
-                        msgmap.hasImage = true;
-                        const imgRec: IImageMap = {
+
+                        // await db.images.put({
+                        //     id, data, srcUrl,
+                        //     fetched: new Date().getTime(),
+                        // });
+                        const imgdb: IImageDb ={
                             id: id,
-                            data: data,
                             srcUrl: srcUrl,
                             fetched: new Date().getTime(),
-                            dataUrl: "",
-                            image: image,
-                            done: false,
-                        };
-                        msgmap.images.push(imgRec);
-                        
+                            data: data,
+                            dataUrl: null,
+                            dataChunk: [],
+                            parentId: msg.id,
+                        }
+                        await ImageTable.put(imgdb);
+
+                        const gimg = document.createElement("graph-image") as GraphImage;
+                        gimg.src = id;
+                        image.replaceWith(gimg);
                     } catch (error) {
                         log.error(error);
                         AI.trackException({ error });
                     }
                 }
             }
-            // if (msgmap.hasImage) {
-            //     withImage += 1;
-            // } else {
-            //     withoutImage += 1;
-            // }
 
-            // for (const image of Array.from(tmpl.content.querySelectorAll("img"))) {
-            //     const srcUrl = image.src;
+            msg.body = tmpl.innerHTML;
 
-            //     if (isGraphHostedContentUrl(srcUrl)) {
-            //         try {
-            //             // Note: download as Blob instead of ArrayBuffer because Blob contains the mime type
-            //             const data: Blob = await client.api(srcUrl).responseType(ResponseType.BLOB).get();
-            //             const id = await hashBlob(data);
-
-            //             await db.images.put({
-            //                 id, data, srcUrl,
-            //                 fetched: new Date().getTime(),
-            //             });
-
-            //             const gimg = document.createElement("graph-image") as GraphImage;
-            //             gimg.src = id;
-            //             image.replaceWith(gimg);
-            //         } catch (error) {
-            //             log.error(error);
-            //             AI.trackException({ error });
-            //         }
-            //     }
-            // }
-
-            // msg.body = tmpl.innerHTML;
-
-            // if ('chatId' in msg) {
-            //     await FindMsgChatMessage.put(msg);
-            // } else {
-            //     await FindMsgChannelMessage.put(msg);
-            // }
-        }
-
-        // log.info(`★★★★★★★★★★ HTML Message count: [${msgMaps.length}] withImage: [${withImage}] withoutImage:[${withoutImage}] ★★★★★★★★★★`);
-
-        // check();
-
-        const processImage = async (rec: IMsgMap) => {
-            if (!rec.hasImage) {
-                await process(rec);
+            if ('chatId' in msg) {
+                await FindMsgChatMessage.put(msg);
             } else {
-                rec.images.forEach(async imgrec => {
-                    // // log.info(`★★★★★★★★★★ Image processing start for id: [${imgrec.id}] ★★★★★★★★★★`);
-                    // const reader = new FileReader;
-                    // reader.onload = async () => {
-                    //     await onloadCallBack(reader, imgrec, rec);
-                    // };
-
-                    // reader.readAsDataURL(imgrec.data);
-                    // // log.info(`★★★★★★★★★★ Image processing end for id: [${imgrec.id}] ★★★★★★★★★★`);
-                    const dataUrl = await blob2dataUrl(imgrec.data);
-                    await db.images.put({
-                        id:imgrec.id, 
-                        data: imgrec.data, 
-                        srcUrl: imgrec.srcUrl,
-                        fetched: imgrec.fetched,
-                        dataUrl: dataUrl,
-                    });
-                    const gimg = document.createElement("graph-image") as GraphImage;
-                    gimg.src = imgrec.id;
-                    imgrec.image.replaceWith(gimg);
-                })
-                await process(rec);
+                await FindMsgChannelMessage.put(msg);
             }
-        };
-
-        for (let i = 0; i < msgMaps.length; i++) {
-            const rec = msgMaps[i];
-            // log.info(`★★★★★★★★★★ msgMaps[${i}] rec.completed: [${rec.completed}] rec.hasImage: [${rec.hasImage}] ★★★★★★★★★★`);
-            await processImage(rec);
         }
-
         log.info(`▲▲▲ getHostedImages END ▲▲▲`);
     }
-}
-
-interface IImageMap extends IFindMsgImageDb {
-    image: HTMLImageElement;
-    done: boolean;
-}
-
-interface IMsgMap {
-    msg: IFindMsgChatMessage | IFindMsgChannelMessage;
-    tmpl: HTMLTemplateElement;
-    hasImage: boolean;
-    completed: boolean;
-    images: IImageMap[];
 }

@@ -175,6 +175,14 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
         // await this.getDataFromDb();
         let { t } = this.state;
 
+        const callBack = () => {
+            db.getLastSync(lastSyncedKey).then(
+                (lastSynced) => {
+                    this.setState({lastSynced});
+                }
+            )
+        };
+
         if (await this.inTeams()) {
             microsoftChats.initialize();
             microsoftChats.registerOnThemeChangeHandler(this.updateTheme);
@@ -187,7 +195,14 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                 websiteUrl: location.href,
             });
 
-            db.login(this.msGraphClient, context.loginHint?? "");
+            db.login({client: this.msGraphClient, userPrincipalName: context.loginHint?? "", getLastSync: callBack}).then(
+                async (value) => {
+                    if (value) {
+                        const lastSynced = await db.getLastSync(lastSyncedKey);
+                        this.setState({lastSynced});
+                    }
+                }
+            )
 
             t = strings.get(context.locale);
 
@@ -203,7 +218,7 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
             });
         } else {
 
-            db.login(this.msGraphClient, this.state.teamsInfo.loginHint);
+            db.login({client: this.msGraphClient, userPrincipalName: this.state.teamsInfo.loginHint, getLastSync: callBack});
 
             this.setState({
                 loginRequired: !haveUserInfo(this.state.teamsInfo.loginHint),

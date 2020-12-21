@@ -23,6 +23,7 @@ import { getTopLevelMessagesLastSynced } from "../db/Sync";
 import { ICommonMessage } from "../i18n/ICommonMessage";
 import { getChannelMap, getInformation, IChannelInfo } from "../ui-jsx";
 import { db } from "../db/Database";
+import { ButtonProps } from "@fluentui/react-northstar";
 
 
 export declare type MyTeam = IFindMsgTeam & { channels: IFindMsgChannel[] };
@@ -204,6 +205,14 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
         // await this.getDataFromDb();
         let { t } = this.state;
 
+        const callBack = () => {
+            db.getLastSync(lastSyncedKey).then(
+                (lastSynced) => {
+                    this.setState({lastSynced});
+                }
+            )
+        };
+
         if (await this.inTeams(2000)) {
             microsoftTeams.initialize();
             microsoftTeams.registerOnThemeChangeHandler(this.updateTheme);
@@ -216,7 +225,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                 websiteUrl: location.href,
             });
 
-            db.login(this.msGraphClient, context.loginHint?? "");
+            db.login({client: this.msGraphClient, userPrincipalName: context.loginHint?? "", getLastSync: callBack});
 
             t = strings.get(context.locale);
 
@@ -231,7 +240,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                 }
             });
  */     } else {
-            db.login(this.msGraphClient, this.state.teamsInfo.loginHint);
+            db.login({client: this.msGraphClient, userPrincipalName: this.state.teamsInfo.loginHint, getLastSync: callBack});
             
             this.initInfo();
     /*             this.setState({
@@ -463,6 +472,20 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
         } = this.state;
         const {hasInfo, info} = getInformation();
 
+        const dbCopy: ComponentEventHandler<ButtonProps> = async() => {
+            const callback1 = () => {
+                db.getLastSync(lastSyncedKey).then(
+                    (lastSynced) => {
+                        this.setState({lastSynced});
+                    }
+                )    
+            }
+            const callback2 = () => {
+                alert("移行処理が完了しました！");
+            }
+            await db.importFromFindMsg(callback1, callback2);
+        }
+
         return (
             <Provider theme={theme}>
                 <Page>
@@ -485,7 +508,11 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                     {hasInfo && info}
 
                     <Flex space="between">
-                        <Header content={header} style={{ marginBlockStart: 0, marginBlockEnd: 0 }} />
+                        <Flex gap="gap.small">
+                            <Header content={header} style={{ marginBlockStart: 0, marginBlockEnd: 0 }} />
+                            <Button onClick={dbCopy}>旧データベース移行</Button>
+                        </Flex>
+
 
                         <Flex.Item align="start">
                             <SyncWidget

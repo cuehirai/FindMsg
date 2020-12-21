@@ -204,6 +204,11 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
     }
 
     /**
+     * このページの高さが固定(スクロールバーなし)かどうかを宣言してください。
+     */
+    protected abstract isFixedPageSize: boolean;
+
+    /**
      * このページのトップにおしらせを表示するかどうかを宣言してください。
      */
     protected abstract showInformation: boolean;
@@ -246,7 +251,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
      * @param context ※initBaseInfoが受け取った引数がそのまま渡されます
      * @param inTeams ※initBaseInfoが受け取った引数がそのまま渡されます
      */
-    protected abstract async setAdditionalState(newstate: ITeamsAuthComponentState, context?: microsoftTeams.Context, inTeams?: boolean): Promise<void>;
+    protected abstract setAdditionalState(newstate: ITeamsAuthComponentState, context?: microsoftTeams.Context, inTeams?: boolean): Promise<void>;
 
     /**
      * componentDidMountから呼び出します。
@@ -302,13 +307,13 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
      * Graphからのデータを同期する場合はオーバーライドして同期処理を実装してください。
      * 使用時はSyncWidgetの属性にこのメソッドを設定します。（例：syncStart={this.startSync}）
      */
-    protected abstract async startSync(): Promise<void>; 
+    protected abstract startSync(): Promise<void>; 
 
     /**
      * 同期を必要とする場合はオーバーライドしてクラス固有の最終同期日時を返却してください。
      * @param target 
      */
-    protected abstract async GetLastSync(target?: string): Promise<Date>;
+    protected abstract GetLastSync(target?: string): Promise<Date>;
     
     // コンポーネントがマウントされたときに呼び出されます。
     // ここでステータスをセットするとページが再描画されます。
@@ -365,41 +370,68 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         const contentBottom = this.renderContentBottom();
         const {hasInfo, info} = getInformation(this.showInformation);
 
-        const res:JSX.Element = (
-            <Provider theme={theme}>
-                <Page>
-                    {this.requireMicrosoftLogin && loginDialog}
+        const contentBase = (
+            <div>
+                {contentTop}
 
-                    {hasInfo && info}
+                {error && <Alert
+                    content={error}
+                    dismissible
+                    variables={{ urgent: true }}
+                    onVisibleChange={this.errorVisibilityChanged}
+                />}
 
-                    {contentTop}
+                {warning && <Alert
+                    content={warning}
+                    dismissible
+                    // variables={{ urgent: true }}
+                    onVisibleChange={this.warningVisibilityChanged}
+                />}
+                {askForStoragePermission && <StoragePermissionWidget granted={this.storagePermissionGranted} t={storagePermission} />}
 
-                    {error && <Alert
-                        content={error}
-                        dismissible
-                        variables={{ urgent: true }}
-                        onVisibleChange={this.errorVisibilityChanged}
-                    />}
+                {content}
+                {contentBottom}
+            </div>            
+        )
 
-                    {warning && <Alert
-                        content={warning}
-                        dismissible
-                        // variables={{ urgent: true }}
-                        onVisibleChange={this.warningVisibilityChanged}
-                    />}
-                    {askForStoragePermission && <StoragePermissionWidget granted={this.storagePermissionGranted} t={storagePermission} />}
+        const nonFixedPageBase = (
+            <Page>
+                {this.requireMicrosoftLogin && loginDialog}
 
-                    {content}
-                    {contentBottom}
+                {hasInfo && info}
 
-                    <div style={{ flex: 1 }} />
+                {contentBase}
+                <div style={{ flex: 1 }} />
+                <Divider />
+                {!this.isUsingStorage && <Text size="smaller" content={footer} />}
+                {this.isUsingStorage && <Flex space="between">
+                    <Text size="smaller" content={footer} />
+                    <StoragePermissionIndicator loading={loading} />
+                </Flex>}
+            </Page>
+        )
+
+        const FixedPageBase = (
+            <div style={{height: "100vh", overflow: 'hidden'}}>
+                {this.requireMicrosoftLogin && loginDialog}
+
+                {hasInfo && info}
+
+                {contentBase}
+                <div style={{height: '30px'}}>
                     <Divider />
                     {!this.isUsingStorage && <Text size="smaller" content={footer} />}
                     {this.isUsingStorage && <Flex space="between">
                         <Text size="smaller" content={footer} />
                         <StoragePermissionIndicator loading={loading} />
                     </Flex>}
-                </Page>
+                </div>
+            </div>
+        )
+
+        const res:JSX.Element = (
+            <Provider theme={theme}>
+                {this.isFixedPageSize? FixedPageBase : nonFixedPageBase}
             </Provider >
         );
         log.info(res);
@@ -431,7 +463,16 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         });
 
         if (this.requireDatabase) {
-            await db.login(this.msGraphClient,loginHint);
+            const callBack = () => {
+                log.info(`##### login callback start #####`)
+                this.GetLastSync().then(
+                    (lastSynced) => {
+                        this.setState({lastSynced}, this.setStateCallBack);
+                    }
+                );
+            }
+    
+            await db.login({client: this.msGraphClient, userPrincipalName: loginHint, getLastSync: callBack});
         }
 
         const lastSynced = await this.GetLastSync(channelId);
