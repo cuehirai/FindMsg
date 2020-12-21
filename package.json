@@ -1,6 +1,6 @@
 {
   "name": "findmsg",
-  "version": "0.4.1",
+  "version": "1.0.0",
   "description": "Kacoms custom search and topics",
   "scripts": {
     "start": "node dist/server.js",
@@ -31,6 +31,7 @@
     "indexeddb-export-import": "^2.1.2",
     "mark.js": "^8.11.1",
     "morgan": "1.10.0",
+    "object-sizeof": "^1.6.1",
     "office-ui-fabric-react": "^7.144.0",
     "react": "^16.13.1",
     "react-dom": "^16.13.1"

@@ -1,6 +1,7 @@
 import * as React from "react";
 
-import { Link, TriangleUpIcon, TriangleDownIcon, Table, Loader, TableRowProps, TableCellProps, ShorthandValue, ShorthandCollection, ComponentSlotStyle } from "../ui";
+// import { Link, TriangleUpIcon, TriangleDownIcon, Table, Loader, TableRowProps, TableCellProps, ShorthandValue, ShorthandCollection, ComponentSlotStyle } from "../ui";
+import { TriangleUpIcon, TriangleDownIcon, Table, Loader, TableRowProps, TableCellProps, ShorthandValue, ShorthandCollection, ComponentSlotStyle } from "../ui";
 
 import { MessageOrder, Direction, IFindMsgChannelMessage } from "../db";
 import * as msTeams from '@microsoft/teams-js';
@@ -10,7 +11,7 @@ import { fixMessageLink } from "../utils";
 // import { highlightNode, collapse, empty } from "../highlight";
 // import { stripHtml } from "../purify";
 import { ContentElement, HtmlTooltip, IChannelInfo } from "../ui-jsx";
-import { Typography } from "@material-ui/core";
+import { Link, Typography } from "@material-ui/core";
 
 
 declare type sortFn = (order: MessageOrder, dir: Direction,) => void;
@@ -136,7 +137,8 @@ export const MessageTable: React.FunctionComponent<IMessageTableProps> = ({ t, m
         const MessageTableRow: (msg: IFindMsgChannelMessage) => TableRowProps = ({ id, subject, authorName, created, modified, body, type, url, channelId }) => ({
             key: id,
             items: [
-                { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(url), info)} disabled={!url}><ContentElement body={subject ?? ""} type="text" filter={filter} /></Link> },
+                // { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(url), info)} disabled={!url}><ContentElement body={subject ?? ""} type="text" filter={filter} /></Link> },
+                { key: 's', truncateContent: true, content: <Link href='#' onClick={() => msTeams.executeDeepLink(fixMessageLink(url), info)}><ContentElement body={subject ?? ""} type="text" filter={filter} /></Link> },
                 // { key: 'a', truncateContent: true, content: authorName || unknownUserDisplayName },
                 { key: 'a', truncateContent: true, content: teamchannelTooltip({authorName, unknownUserDisplayName, channelId, channelMap, teamchannel}) },
                 { key: 't', truncateContent: false, content: m2dt(isValid(modified) ? modified : created) },

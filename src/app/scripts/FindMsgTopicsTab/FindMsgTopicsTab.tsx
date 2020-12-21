@@ -185,7 +185,15 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             websiteUrl: location.href,
         });
 
-        await db.login(this.msGraphClient,loginHint);
+        const callBack = () => {
+            db.getLastSync(topLevelMessagesSyncKey).then(
+                (lastSynced) => {
+                    this.setState({lastSynced});
+                }
+            )
+        };
+
+        await db.login({client: this.msGraphClient, userPrincipalName: loginHint, getLastSync: callBack});
 
         // add lastSynced for top level messages
         const lastSynced = channelId ? await Sync.getChannelLastSynced(channelId) : await getTopLevelMessagesLastSynced();

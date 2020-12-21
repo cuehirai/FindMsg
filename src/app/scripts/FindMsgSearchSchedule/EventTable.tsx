@@ -1,8 +1,8 @@
 import * as React from "react";
-import { Button, Typography } from "@material-ui/core";
+import { Button, Link, Typography } from "@material-ui/core";
 import * as msTeams from '@microsoft/teams-js';
 
-import { Link, TriangleUpIcon, TriangleDownIcon, Table, Loader, TableRowProps, TableCellProps, ShorthandValue, ShorthandCollection, ComponentSlotStyle } from "../ui";
+import { TriangleUpIcon, TriangleDownIcon, Table, Loader, TableRowProps, TableCellProps, ShorthandValue, ShorthandCollection, ComponentSlotStyle } from "../ui";
 import { ChipsArray, ContentElement, HtmlTooltip } from "../ui-jsx";
 import { fixMessageLink } from "../utils";
 import { format } from "../dateUtils";
@@ -172,10 +172,11 @@ export const EventTable: React.FunctionComponent<IEventTableProps> = ({ translat
             return link;
         };
 
-        const EventTableRow: (event: IFindMsgEvent) => TableRowProps = ({ id, subject, organizerName, organizerMail, attendees, start, end, isAllDay, body, type, webLink }) => ({
+        const EventTableRow: (event: IFindMsgEvent) => TableRowProps = ({ id, subject, organizerName, organizerMail, attendees, start, end, isAllDay, body, type }) => ({
             key: id,
             items: [
-                { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(deeplink(id)), log.info)} disabled={!webLink}><ContentElement body={title(subject, notitle)} type="text" filter={filter} /></Link> },
+                // { key: 's', truncateContent: true, content: <Link onClick={() => msTeams.executeDeepLink(fixMessageLink(deeplink(id)), log.info)} disabled={!webLink}><ContentElement body={title(subject, notitle)} type="text" filter={filter} /></Link> },
+                { key: 's', truncateContent: true, content: <Link href='#' onClick={() => msTeams.executeDeepLink(fixMessageLink(deeplink(id)), log.info)} ><ContentElement body={title(subject, notitle)} type="text" filter={filter} /></Link> },
                 { key: 'o', truncateContent: true, content: organizerWithAttendeeTooltip(organizerName, organizerMail, unknownUserDisplayName, attendees) },
                 { key: 't', truncateContent: false, content: stContent(start, end, isAllDay) },
                 { key: 'c', truncateContent: true, content: <ContentElement body={body} type={type} filter={filter} tooltip={true}/> }

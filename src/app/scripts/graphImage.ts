@@ -1,5 +1,4 @@
-import { db } from './db/Database';
-import { b64toBlob } from './utils';
+import { ImageTable } from './db/Image/ImageEntity';
 
 // this must NOT be an arrow function so that [this] points to the element
 const revoke = function (this: GlobalEventHandlers): void { URL.revokeObjectURL((this as HTMLImageElement).src) };
@@ -27,19 +26,20 @@ export class GraphImage extends HTMLElement {
         const src = this.getAttribute("src");
         if (!src) return;
 
-        const img = await db.images.get(src)
+        // const img = await db.images.get(src)
+        const img = await ImageTable.get(src)
         if (!img) return;
 
-        const data = img.dataUrl? b64toBlob(img.dataUrl?? "") : null;
-        if (!data) return;
+        // const data = img.dataUrl? b64toBlob(img.dataUrl?? "") : null;
+        // if (!data) return;
 
         this.removeContents();
 
         const el = document.createElement("img");
         el.onload = revoke;
         el.onerror = this.imageError;
-        // el.src = URL.createObjectURL(img.data);
-        el.src = URL.createObjectURL(data);
+        el.src = URL.createObjectURL(img.data);
+        // el.src = URL.createObjectURL(data);
 
         this.append(el);
     }
