@@ -48,23 +48,19 @@ export interface ITableLastSync {
     lastSync: number;
 }
 
-// interface ITableIndex {
-//     name: string;
-//     files: Array<string>;
-// }
-
-// interface ITableOfContent {
-//     exported: string;
-//     tables: Array<ITableIndex>;
-// }
-
 interface IExportFile {
     table: string;
     data: any[];
 }
 
+interface IFile {
+    file: string;
+    compressed: boolean;
+}
+
 interface IExportIndexFile {
     exported: string;
+    files: IFile[];
 }
 
 /**
@@ -329,30 +325,58 @@ class Database extends Dexie {
         await this.channelMessages.where(indexes.messages.$channelId$id).between([cid, Dexie.minKey], [cid, Dexie.maxKey]).delete();
     }
 
+    private serverFiles: IExportIndexFile | null = null;
+
     /**
      * DBを使用する前に必ずログインしてください。
-     * 戻り値は、インポートを実行してその結果が成功の場合のみTrueです。Falseが戻ってもエラーというわけではありません。
      * @param client Graphクライアント
      * @param userPrincipalName ログインヘルプ
-     * @param avoidReload 自動リロードの判定を回避するかどうか※特殊なケースを除きこのパラメータは指定しないでください。
-     * @param getLastSync インポートが実行されたあと最終同期日時を取得することができるタイミングで実行されるコールバックです。
      */
-    async login(arg: {client: Client, userPrincipalName: string, avoidReload?: boolean, getLastSync?: () => void}): Promise<boolean> {
+    async login(arg: {client: Client, userPrincipalName: string}): Promise<DbLoginResult> {
         info(`▼▼▼ Database.login START ▼▼▼`);
-        let res = false;
+        let res: DbLoginResult = "OK";
+
+        const getFileIndex = async (): Promise<IExportIndexFile | null> => {
+            let res: IExportIndexFile | null = null;
+            const indexFile = await FileUtil.readFile(arg.client, this.exportIndexName(), this.exportfilePath());
+            if (indexFile) {
+                const json: IExportIndexFile = JSON.parse(indexFile);
+                info(`***** index file found. JSON.parse result: [${JSON.stringify(json)}]`);
+                res = {
+                    exported: json.exported,
+                    files: json.files,
+                }
+            } else {
+                info(`***** index file not found.`);
+            }
+            return res;
+        };
 
         this.msGraphClient = arg.client;
-        if ( !(arg.avoidReload?? false)) {
-            if (arg.userPrincipalName != this.userPrincipalName) {
-                info(`★★★ Login user changed [${this.userPrincipalName}] => [${arg.userPrincipalName}] ★★★`);
-                // アプリへの初回ログインまたはユーザが変わった場合は強制的にリロード
-                this.userPrincipalName = arg.userPrincipalName;
-                localStorage.setItem(this.lastUserKey(), arg.userPrincipalName);
-                res = await this.import({getLastSync: arg.getLastSync});
+        if (arg.userPrincipalName != this.userPrincipalName) {
+            info(`★★★ Login user changed [${this.userPrincipalName}] => [${arg.userPrincipalName}] ★★★`);
+            // アプリへの初回ログインまたはユーザが変わった場合=>SHOULD_IMPORT
+            if (this.userPrincipalName !== "") {
+                // ユーザが変わった場合は強制的にクリア
+                await this.clear();
+            }
+            this.userPrincipalName = arg.userPrincipalName;
+            localStorage.setItem(this.lastUserKey(), arg.userPrincipalName);
+            const index = await getFileIndex();
+            if (index) {
+                this.serverFiles = index;
+                res = "SHOULD_IMPORT";
             } else {
-                // 同じユーザが使い続けている場合、現在のデバイス/ブラウザで最後にエクスポートまたはインポートした日付よりも
-                // エクスポートファイルの最終更新日時が新しければリロードする
-                // ※他のデバイス/ブラウザで同期・エクスポートした内容を取り込む想定
+                this.serverFiles = null;
+            }
+        } else {
+            // 同じユーザが使い続けている場合、現在のデバイス/ブラウザで最後にエクスポートまたはインポートした日付よりも
+            // エクスポートファイルの最終更新日時が新しければリロードを勧める
+            // ※他のデバイス/ブラウザで同期・エクスポートした内容を取り込む想定
+            const index = await getFileIndex();
+            if (index) {
+                this.serverFiles = index;
+
                 const lastExport = (): Date => {
                     const local = localStorage.getItem(this.lastExportKey());
                     return local? du.parseISO(local) : du.invalidDate();
@@ -374,29 +398,18 @@ class Database extends Dexie {
                         latest = lastImport();
                     }
                 }
-                
-                const indexFile = await FileUtil.readFile(arg.client, this.exportIndexName(), this.exportfilePath());
-                if (indexFile) {
-                    try {
-                        const index: IExportIndexFile = JSON.parse(indexFile);
-                        if (index.exported) {
-                            const exported = du.parseISO(index.exported);
-                            info(`★★★ lastExport:[${lastExport()}] lastImport:[${lastImport()}] lastModified:[${exported}] ★★★`);
-                            if (!du.isValid(latest) || exported > latest) {
-                                info(`★★★ executing db import!! ★★★`);
-                                res = await this.import({getLastSync: arg.getLastSync});
-                            } else {
-                                info(`★★★ should be no need to import ★★★`);
-                            }
-                        }
-                    } catch (e) {
-                        warn(`★★★ ${this.exportIndexName()} is invalid... Import is not performed. ★★★`);
-                    }
+                const exported = du.parseISO(index.exported);
+                info(`★★★ lastExport:[${lastExport()}] lastImport:[${lastImport()}] lastModified:[${exported}] ★★★`);
+                if (!du.isValid(latest) || exported > latest) {
+                    info(`★★★ user had better import!! ★★★`);
+                    res = "RECOMMEND_IMPORT";
                 } else {
-                    warn(`★★★ ${this.exportIndexName()} not found... Import is not performed. ★★★`);
-                }            
-            }    
-        }
+                    info(`★★★ should be no need to import ★★★`);
+                }    
+            } else {
+                this.serverFiles = null;
+            }
+        }    
         info(`▲▲▲ Database.login END ▲▲▲`);
         return res;
     }
@@ -422,7 +435,7 @@ class Database extends Dexie {
      * @param date 同期実行した日時
      * @param doExport trueを指定するとDBエクスポートを実施します(省略値はfalse)
      */
-    async storeLastSync(id: string, date: Date, doExport?: boolean): Promise<void> {
+    async storeLastSync(id: string, date: Date, doExport?: boolean, progressCallback?: (tableName: string, progress: number) => void, callback?: () => void): Promise<void> {
         info(`▼▼▼ storeLastSync START... ID: [${id}] date: [${date}] doExport: [${doExport}] ▼▼▼`);
         await this.transaction("rw", this.lastsync, async() => {
             const rec: ITableLastSync = {id: id, lastSync: du.dateToNumber(date)};
@@ -431,7 +444,7 @@ class Database extends Dexie {
         if (doExport?? false) {
             // 最終同期日時は常にエクスポートファイルの最終更新日時より古くなるのでエクスポートの引数としては使用しない
             // ※同一ユーザが使い続けているのに、タブを選択するたびにインポートが必要と判断されてしまうため
-            await this.export({});
+            await this.export({includeImages: true, progressCallback: progressCallback, callback: callback});
         }
         info(`▲▲▲ storeLastSync END... ID: [${id}] ▲▲▲`);
     }
@@ -458,7 +471,7 @@ class Database extends Dexie {
      * @param exportTo 既定のエクスポートパスと異なる場所に保存したい場合に指定するパス文字列です
      * @param callback 全テーブルのエクスポートが完了した時点で呼び出されるコールバックです
      */
-    async export(arg: {syncDatetime?: Date, exportTo?: string, callback?: () => void}): Promise<boolean> {
+    async export(arg: {syncDatetime?: Date, exportTo?: string, includeImages: boolean, progressCallback?: (tableName: string, done: number, all: number, progress: number) => void, callback?: () => void}): Promise<boolean> {
         info(`▼▼▼ export START ▼▼▼`);
         let res = false;
 
@@ -466,46 +479,53 @@ class Database extends Dexie {
             warn(`Database is not logged in!`);
         } else {
             const exportPath = arg.exportTo?? this.exportfilePath();
+            const files: IFile[] = [];
 
             // Export処理本体    
             const client = this.msGraphClient;
+            let allCount = 0
+            await Promise.all(
+                this.tables.map(async table => {
+                    if (arg.includeImages || table.name !== this.images.name) {
+                        const recs = await table.toArray();
+                        allCount += recs.length;    
+                    }
+                })    
+            )
+            let doneCount = 0
+            const progPercent = () => {
+                let res = 0;
+                if (allCount !==0) {
+                    res = Math.floor(doneCount / allCount * 100);
+                }
+                return res;
+            }
 
             const exportTables = async(client: Client): Promise<boolean> => {
                 let res = true;
-                for (let i = 0; i < this.tables.length; i++) {
-                    const table = this.tables[i];
-                    await exportToFiles(client, table).then(
-                        (value) => {
-                            if (i == this.tables.length - 1) {
-                                arg.callback && arg.callback();
-                            }
-                            if (!value) {
-                                res = false;
-                                warn(`exportToFiles failed`);
-                            }
-                        }
-                    ).catch(
-                        (reason) => {
+                await Promise.all(this.tables.map(async (table) => {
+                    if (arg.includeImages || table.name !== this.images.name) {
+                        if ( !(await exportToFiles(client, table)) ) {
                             res = false;
-                            warn(`exportToFiles failed: reason [${reason}]`);
-                        }
-                    )
-
-                }
+                            warn(`exportToFiles failed`);
+                        }    
+                    }
+                }));
                 return res;
             }
 
             const exportToFiles = async(client: Client, table: Dexie.Table): Promise<boolean> => {
                 let res = true;
 
-               let arr: Array<any> = [];
+                let arr: Array<any> = [];
                 let fileNo = 0;
 
                 await table.each(async (rec) => {
                     arr.push(rec);
+                    doneCount += 1;
                     let mem = sizeof(arr);
-                    // 20MBを超えたらいったんファイルに出力
-                    if (sizeof(arr) > 20971520) {
+                    // メモリサイズが15MBを超えたらいったんファイルに出力
+                    if (sizeof(arr) > 15728640) {
                         info(`@@@@@ current memory size of output record array: ${mem} @@@@@`);
                         const fileName = this.exportfileName(table.name, fileNo++);
                         // files.push(fileName);
@@ -514,10 +534,13 @@ class Database extends Dexie {
                             data: arr,
                         };
                         const jsonString = JSON.stringify(content);
+                        // const compressed = compress(jsonString);
+                        files.push({file: fileName, compressed: false});
                         arr = [];
                         mem = sizeof(arr);
                         info(`@@@@@ memory size of output record array after clear: ${mem} @@@@@`);
                         if (await FileUtil.writeFile(client, fileName, jsonString, exportPath, true)) {
+                            arg.progressCallback && arg.progressCallback(table.name, doneCount, allCount, progPercent());
                             info(`@@@@@ file [${fileName}] written into OneDrive @@@@@`);
                         } else {
                             res = false;
@@ -533,7 +556,10 @@ class Database extends Dexie {
                         data: arr,
                     };
                     const jsonString = JSON.stringify(content);
+                    // const compressed = compress(jsonString);
+                    files.push({file: fileName, compressed: false});
                     if (await FileUtil.writeFile(client, fileName, jsonString, exportPath, true)) {
+                        arg.progressCallback && arg.progressCallback(table.name, doneCount, allCount, progPercent());
                         info(`@@@@@ file [${fileName}] written into OneDrive @@@@@`);
                     } else {
                         res = false;
@@ -544,18 +570,18 @@ class Database extends Dexie {
                 return res;
             }
 
-            exportTables(client).then(
+            await exportTables(client).then(
                 async (value) => {
                     if (value) {
                         res = true;
                         const lastExport = arg.syncDatetime?? du.now();
+
+                        const index: IExportIndexFile = {exported: du.formatISO(lastExport), files: files};
+                        const indexFile = JSON.stringify(index);
+                        await FileUtil.writeFile(client, this.exportIndexName(), indexFile, exportPath, true);
                         if (this.userPrincipalName != "") {
                             localStorage.setItem(this.lastExportKey(), du.formatISO(lastExport));
                         }
-
-                        const index: IExportIndexFile = {exported: du.formatISO(lastExport)};
-                        const indexFile = JSON.stringify(index);
-                        await FileUtil.writeFile(client, this.exportIndexName(), indexFile, exportPath, true);
                     }
                 }
             ).catch(
@@ -565,6 +591,7 @@ class Database extends Dexie {
             )    
         }
 
+        arg.callback && arg.callback();
         info(`▲▲▲ export END ▲▲▲`);
 
         return res;
@@ -575,50 +602,87 @@ class Database extends Dexie {
      * @param importFrom 既定のインポートパスと異なる場所からインポートしたい場合に指定するパス文字列です
      * @param getLastSync インポートが実行されたあと最終同期日時を取得することができるタイミングで実行されるコールバックです
      */
-    async import(arg: {importFrom?: string, getLastSync?: () => void}): Promise<boolean> {
-        info(`▼▼▼ import START ▼▼▼`);
+    async import(arg: {importFrom?: string, progressCallback?: (tableName: string, done: number, all: number, progress: number) => void, getLastSync?: () => void}): Promise<boolean> {
         let res = false;
         const importFrom = arg.importFrom?? this.exportfilePath();
+        info(`▼▼▼ import START importFrom: [${importFrom}] ▼▼▼ `);
 
-        // インポートを実施する前に、有無を言わさずDBをクリアする
-        if (this.clear()) {
-            if (!this.msGraphClient) {
-                warn(`Database is not logged in!`);
-            } else {
-                // インポートすべきファイルがあるかどうかを確認
-                const client = this.msGraphClient;
+        const allCount = this.serverFiles? this.serverFiles.files? this.serverFiles.files.length : 0 :0;
+        let doneCount = 0
+        const progPercent = () => {
+            let res = 0;
+            if (allCount !== 0) {
+                res = Math.floor(doneCount / allCount * 100);
+            }
+            return res;
+        }
+
+        const importContent = async(fileName: string, compressed: boolean, content: string) => {
+            try {
+                let fileObj: IExportFile | null = null;
+                if (compressed) {
+                    const decomp = content;
+                    if (decomp) {
+                        fileObj = JSON.parse(decomp);
+                    } else {
+                        warn(`failed to decompress data`)
+                    }
+                } else {
+                    fileObj = JSON.parse(content);
+                }
+                if (fileObj) {
+                    if (fileObj.table && fileObj.data) {
+                        info(`@@@@@ importing file [${fileName}] into table [${fileObj.table}] @@@@@`);
+                        const table = this.table(fileObj.table);
+                        await table.bulkPut(fileObj.data);
+                        if (this.userPrincipalName != "") {
+                            localStorage.setItem(this.lastImportKey(), du.formatISO(du.now()));
+                        }
+                        doneCount += 1;
+                        arg.progressCallback && arg.progressCallback(table.name, doneCount, allCount, progPercent())
+                        info(`@@@@@ file [${fileName}] imported into table [${fileObj.table}] @@@@@`);
+                    }    
+                }
+            } catch (e) {
+                warn(`failed to import file [${fileName}]; error [${e}]`);
+            }
+        }
+        
+        if (!this.msGraphClient) {
+            warn(`Database is not logged in!`);
+        } else {
+            // インポートすべきファイルがあるかどうかを確認
+            const client = this.msGraphClient;
+            if (!(this.serverFiles) || !this.serverFiles.files || this.serverFiles.files.length == 0) {
+                info(`***** assumed as old version export files`);
+                // インデックスファイルが指定されていない/インデックスファイルにファイル一覧がない場合は旧バージョンエクスポートファイルとみなし
+                // ディレクトリ内のファイルをすべてインポートする（圧縮なし）
                 const items = await FileUtil.getItems(client, importFrom, true);
-                let index = 0
                 await Promise.all(
                     items.map(async item =>{
-                        index += 1;
                         if (item.file && item.name && item.name != this.exportIndexName()) {
                             const content = await FileUtil.readFile(client, item.name, importFrom);
                             if (content) {
-                                try {
-                                    const fileObj: IExportFile = JSON.parse(content);
-                                    if (fileObj.table && fileObj.data) {
-                                        info(`@@@@@ importing file [${item.name}] into table [${fileObj.table}] @@@@@`);
-                                        const table = this.table(fileObj.table);
-                                        await table.bulkPut(fileObj.data);
-                                        if (this.userPrincipalName != "") {
-                                            localStorage.setItem(this.lastImportKey(), du.formatISO(du.now()));
-                                        }
-                                        info(`@@@@@ file [${item.name}] imported into table [${fileObj.table}] @@@@@`);
-                                        if (index > items.length) {
-                                            arg.getLastSync && arg.getLastSync();
-                                        }
-                                    }    
-                                } catch (e) {
-                                    warn(`failed to import file [${item.name}]`);
-                                }
+                                await importContent(item.name, false, content);
                             }
                         }    
                     })
+                )    
+            } else {
+                info(`***** assumed as new version (compressed) export files`);
+                // インデックスファイルのファイル一覧にデータがある場合は指定されているファイルをインポートする（圧縮：指定に従う）
+                await Promise.all(
+                    this.serverFiles.files.map(async file => {
+                        const content = await FileUtil.readFile(client, file.file, importFrom);
+                        if (content) {
+                            await importContent(file.file, file.compressed, content);
+                        }
+                    })
                 )
-
-                res = true;
             }
+            arg.getLastSync && arg.getLastSync();
+
+            res = true;
         }
         info(`▲▲▲ import END ▲▲▲`);
 
@@ -659,17 +723,17 @@ class Database extends Dexie {
             // 旧DBインスタンスを生成
             const client = this.msGraphClient;
             const oldDb = new Database("FindMsg-database");
-            oldDb.login({client: client, userPrincipalName: this.userPrincipalName, avoidReload: true});
+            oldDb.login({client: client, userPrincipalName: this.userPrincipalName});
 
             // 旧DBをバックアップ
-            await oldDb.export({exportTo: `AppData/FindMsg/${this.accountDomain()}/${this.accountName()}`});
+            await oldDb.export({includeImages: true, exportTo: `AppData/FindMsg/${this.accountDomain()}/${this.accountName()}`});
 
             // lastsyncテーブルを移行
             const createLastSynced = async(lastSyncedKey: string) => {
                 const local = localStorage.getItem(lastSyncedKey);
                 if (local) {
                     const lastSynced = du.parseISO(local);
-                    await this.storeLastSync(lastSyncedKey, lastSynced, false);    
+                    await this.storeLastSync(lastSyncedKey, lastSynced);    
                 }
             }
             await this.teams.bulkPut(await oldDb.teams.toArray());
@@ -705,10 +769,11 @@ class Database extends Dexie {
             callback1();
 
             // 移行済みDBをエクスポート
-            await this.export({callback: callback2});
+            await this.export({includeImages: true, callback: callback2});
         }
     }
 }
 
+export declare type DbLoginResult = "OK" | "NG" | "SHOULD_IMPORT" | "RECOMMEND_IMPORT";
 export const db = new Database(`${AppConfig.AppInfo.name}-database`);
 export const idx = indexes;

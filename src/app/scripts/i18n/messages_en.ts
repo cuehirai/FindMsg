@@ -40,6 +40,21 @@ export const messages: IMessageTranslation = {
         syncEntityWithCount: (entityName: string, count: number) => `Syncing [${entityName}]... ${count}`,
         syncSubEntity: (parentName: string, entityName: string) => `Syncing [${entityName}] of [${parentName}]...`,
         syncSubEntityWithCount: (parentName: string, entityName: string, count: number) => `Syncing [${entityName}] of [${parentName}]... ${count}`,
+        confirmExport: 
+            `Do you want to export the data?\n
+            This may take several minutes.`,
+        confirmExportOption: `(time may be shorter if exclude images)`,
+        exportProgress: (tableName: string, done: number, all: number, progress: number) => `Exporting ${tableName}... ( ${done} / ${all} ) ${progress}% completed`,
+        confirmImportForNewUser: `Do you want to import data to the database?`,
+        confirmImportNewerData: 
+            `there is a newer export data in the One Drive than current database.\n 
+            Do you want to import?`,
+        importProgress: (tableName: string, done: number, all: number, progress: number) => `Importing ${tableName}.... ( ${done} / ${all} ) ${progress}% completed`,
+        exportImportMessage: `Please do not close this application or move to other TAB.`,
+        standingBy: `Standing-by for the process...`,
+        yes: `yes`,
+        no: `no`,
+        exportImages: `export image data`,
     },
 
     entities: {

@@ -124,7 +124,7 @@ export const topLevelMessagesSyncKey = "FindMsg_toplevel_messages_last_synced";
 // export const getTopLevelMessagesLastSynced = (): Date => du.parseISO(localStorage.getItem(topLevelMessagesSyncKey) ?? "");
 // const setTopLevelMessagesLastSynced = (ts: Date) => localStorage.setItem(topLevelMessagesSyncKey, du.formatISO(ts));
 export const getTopLevelMessagesLastSynced = async (): Promise<Date> => await db.getLastSync(topLevelMessagesSyncKey);
-const setTopLevelMessagesLastSynced = async (ts: Date, doExport: boolean) => await db.storeLastSync(topLevelMessagesSyncKey, ts, doExport);
+const setTopLevelMessagesLastSynced = async (ts: Date) => await db.storeLastSync(topLevelMessagesSyncKey, ts);
 
 // chat部
 const chatSyncKey = "FindMsg_chats_last_synced";
@@ -164,7 +164,7 @@ export class Sync {
      * @param progress a function to accept sync progress reports
      */
     @log.traceAsync(true)
-    static async autoSyncAll(client: Client, includeReplies: boolean, checkCancel: throwFn = nop, progress: progressFn = nop, { teamList, channelList, topLevelMessages, replies }: ISyncProgressTranslation, doExport: boolean): Promise<boolean> {
+    static async autoSyncAll(client: Client, includeReplies: boolean, checkCancel: throwFn = nop, progress: progressFn = nop, { teamList, channelList, topLevelMessages, replies }: ISyncProgressTranslation): Promise<boolean> {
         let success = true;
 
         if (await this.isTeamListStale()) {
@@ -185,7 +185,7 @@ export class Sync {
             let synced = 0;
             success = success && await Sync.syncTopLevelMessages(client, channel, checkCancel, n => progress(topLevelMessages(channel.displayName, synced += n)));
         }
-        await setTopLevelMessagesLastSynced(await FindMsgChannel.getOldestSync(), doExport);
+        await setTopLevelMessagesLastSynced(await FindMsgChannel.getOldestSync());
 
         if (includeReplies) {
             const batchSize = 20;
@@ -715,7 +715,11 @@ export class Sync {
                         chatName: chat.topic,
                     }
                 })
-                success = false;
+                if ("statusCode" in error && error.statusCode == 403) {
+                    log.info(`##### error 403(Forbidden) ignored. continue the process #####`);
+                } else {
+                    success = false;
+                }
             }
         }
 

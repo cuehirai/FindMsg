@@ -21,9 +21,8 @@ import { StoragePermissionIndicator } from "../StoragePermissionIndicator";
 import { AI } from '../appInsights';
 import { getTopLevelMessagesLastSynced } from "../db/Sync";
 import { ICommonMessage } from "../i18n/ICommonMessage";
-import { getChannelMap, getInformation, IChannelInfo } from "../ui-jsx";
+import { DatabaseLogin, ExportImportComponents, getChannelMap, getInformation, IChannelInfo, IExportImportArgs, IExportImportState } from "../ui-jsx";
 import { db } from "../db/Database";
-import { ButtonProps } from "@fluentui/react-northstar";
 
 
 export declare type MyTeam = IFindMsgTeam & { channels: IFindMsgChannel[] };
@@ -90,6 +89,8 @@ export interface IFindMsgSearchTabState extends ITeamsBaseComponentState, ITeamC
     t: IMessageTranslation;
 
     channelMap: Map<string, IChannelInfo>;
+
+    exportImportState: IExportImportState;
 }
 
 
@@ -118,7 +119,7 @@ export interface ISearchTabTranslation {
 const lastSyncedKey = "FindMsgSearch_last_synced";
 // const loadLastSynced = (): Date => du.parseISO(localStorage.getItem(lastSyncedKey) ?? "");
 // const storeLastSynced = (m: Date): void => localStorage.setItem(lastSyncedKey, du.formatISO(m));
-const storeLastSynced = async (m: Date): Promise<void> => await db.storeLastSync(lastSyncedKey, m, true);
+const storeLastSynced = async (m: Date): Promise<void> => await db.storeLastSync(lastSyncedKey, m);
 
 
 interface DateRangeRadioGroupItemProps extends RadioGroupItemProps {
@@ -193,6 +194,19 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
             theme: this.getTheme(this.getQueryVariable("theme")),
 
             channelMap: new Map<string, IChannelInfo>(),
+
+            exportImportState: {
+                dblogin: "NG",
+                exportDialog: false,
+                exporting: false,
+                importDialog: false,
+                importing: false,
+                processingTable: "",
+                doneCount: 0,
+                allCount: 0,
+                currentProgress: 0,
+                exportImages: true,
+            },
         }
 
         this.msGraphClient = Client.init({ authProvider: this.authProvider });
@@ -205,13 +219,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
         // await this.getDataFromDb();
         let { t } = this.state;
 
-        const callBack = () => {
-            db.getLastSync(lastSyncedKey).then(
-                (lastSynced) => {
-                    this.setState({lastSynced});
-                }
-            )
-        };
+        let newExportImportState = this.state.exportImportState;
 
         if (await this.inTeams(2000)) {
             microsoftTeams.initialize();
@@ -225,7 +233,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                 websiteUrl: location.href,
             });
 
-            db.login({client: this.msGraphClient, userPrincipalName: context.loginHint?? "", getLastSync: callBack});
+            newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: context.loginHint?? "", state: this.state.exportImportState});
 
             t = strings.get(context.locale);
 
@@ -240,7 +248,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                 }
             });
  */     } else {
-            db.login({client: this.msGraphClient, userPrincipalName: this.state.teamsInfo.loginHint, getLastSync: callBack});
+            newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: this.state.teamsInfo.loginHint, state: this.state.exportImportState});
             
             this.initInfo();
     /*             this.setState({
@@ -258,7 +266,8 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
 
         this.setState({
             askForStoragePermission: !storage.granted() && storage.askForPermission,
-            loading: false
+            loading: false,
+            exportImportState: newExportImportState,
         });
     }
 
@@ -472,19 +481,29 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
         } = this.state;
         const {hasInfo, info} = getInformation();
 
-        const dbCopy: ComponentEventHandler<ButtonProps> = async() => {
-            const callback1 = () => {
-                db.getLastSync(lastSyncedKey).then(
-                    (lastSynced) => {
-                        this.setState({lastSynced});
-                    }
-                )    
-            }
-            const callback2 = () => {
-                alert("移行処理が完了しました！");
-            }
-            await db.importFromFindMsg(callback1, callback2);
+        const exportImportCompArg: IExportImportArgs = {
+            lastSyncedKey: lastSyncedKey,
+            exportCallback: async (newState: IExportImportState) => {this.setState({exportImportState: newState});},
+            importCallback: async (newState: IExportImportState, lastSynced: Date) => {this.setState({lastSynced: lastSynced, exportImportState: newState})},
+            otherCallback: (newState: IExportImportState) => {this.setState({exportImportState: newState});},
+            state: {...this.state.exportImportState},
+            translate: this.state.t,
+            exportOptionAvailable: true,
         }
+
+        // const dbCopy: ComponentEventHandler<ButtonProps> = async() => {
+        //     const callback1 = () => {
+        //         db.getLastSync(lastSyncedKey).then(
+        //             (lastSynced) => {
+        //                 this.setState({lastSynced});
+        //             }
+        //         )    
+        //     }
+        //     const callback2 = () => {
+        //         alert("移行処理が完了しました！");
+        //     }
+        //     await db.importFromFindMsg(callback1, callback2);
+        // }
 
         return (
             <Provider theme={theme}>
@@ -505,13 +524,18 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                         content={authResult?.message}
                     />
 
+                    {ExportImportComponents(exportImportCompArg)}
+
                     {hasInfo && info}
 
                     <Flex space="between">
+                        <Header content={header} style={{ marginBlockStart: 0, marginBlockEnd: 0 }} />
+                        {/* 
                         <Flex gap="gap.small">
                             <Header content={header} style={{ marginBlockStart: 0, marginBlockEnd: 0 }} />
                             <Button onClick={dbCopy}>旧データベース移行</Button>
                         </Flex>
+                        */}
 
 
                         <Flex.Item align="start">
@@ -762,7 +786,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
             const [cancel, checkCancel] = cancellation();
 
             this.setState({ syncing: true, syncCancel: cancel, syncCancelled: false, error: "", warning: "" });
-            const result = await Sync.autoSyncAll(this.msGraphClient, true, checkCancel, this.reportProgress, syncProgress, false);
+            const result = await Sync.autoSyncAll(this.msGraphClient, true, checkCancel, this.reportProgress, syncProgress);
             // if (result) {
             //     lastSynced = du.now();
             //     storeLastSynced(lastSynced);
@@ -786,7 +810,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
             lastSynced = du.now();
             storeLastSynced(lastSynced);
             await this.getDataFromDb();
-            this.setState({ syncing: false, lastSynced });
+            this.setState({ syncing: false, lastSynced, exportImportState:{...this.state.exportImportState, exportDialog: true} });
         }
     }
 

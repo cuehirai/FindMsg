@@ -1,6 +1,6 @@
 import { info, warn, error } from "./logger";
 import * as Bowser from "bowser";
-
+// import LZString from "lz-string";
 
 /**
  * Ensures that the parameter is not undefined or null
@@ -382,3 +382,20 @@ export function b64toBlob(b64Data: string, sliceSize=512):Blob {
     return blob;
 }
 
+// export function compress(data: string): any {
+//     info(`▼▼▼ compress START data size: [${data.length}] ▼▼▼`);
+//     const algorithm = compressjs.Lzp3;
+//     const buf = Buffer.from(data);
+//     const res = algorithm.compressFile(buf);
+//     info(`▲▲▲ compress END size after compressed: [${(res as string).length}] ▲▲▲`);
+//     return res;
+// }
+
+// export function decompress(data: any): string {
+//     info(`▼▼▼ decompress START data size: [${(data as string).length}] ▼▼▼`);
+//     const algorithm = compressjs.Lzp3;
+//     const decomp = algorithm.decompressFile(data);
+//     const res = Buffer.from(decomp).toString();
+//     info(`▲▲▲ decompress END size after compressed: [${res}] ▲▲▲`);
+//     return res;
+// }

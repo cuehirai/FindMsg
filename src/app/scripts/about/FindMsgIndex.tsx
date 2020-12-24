@@ -22,6 +22,7 @@ interface IFindMsgIndexState extends IMyOwnState {
 
 
 export class FindMsgIndex extends TeamsBaseComponentWithAuth {
+    protected exportOptionAvailable = true;
     protected isFixedPageSize = false;
     protected showInformation = false;
     protected async setAdditionalState(newstate: ITeamsAuthComponentState, context?: microsoftTeams.Context, inTeams?: boolean): Promise<void> {
