@@ -22,7 +22,7 @@ import { AI } from '../appInsights';
 import { db, idx } from "../db/Database";
 import Dexie from "dexie";
 import { ICommonMessage } from "../i18n/ICommonMessage";
-import { getInformation } from "../ui-jsx";
+import { DatabaseLogin, ExportImportComponents, getInformation, IExportImportArgs, IExportImportState } from "../ui-jsx";
 
 
 declare type SearchUserItem = DropdownItemProps & { key: string };
@@ -77,6 +77,8 @@ export interface IFindMsgSearchChatState extends ITeamsBaseComponentState, IChat
 
     teamsInfo: ITeamssInfo;
     t: IMessageTranslation;
+
+    exportImportState: IExportImportState;
 }
 
 
@@ -106,7 +108,7 @@ const lastSyncedKey = "FindMsgSearchChat_last_synced";
 // const loadChatLastSynced = (): Date => du.parseISO(localStorage.getItem(lastSyncedKey) ?? "");
 // const storeChatLastSynced = (m: Date): void => localStorage.setItem(lastSyncedKey, du.formatISO(m));
 const loadChatLastSynced = async (): Promise<Date> => await db.getLastSync(lastSyncedKey);
-const storeChatLastSynced = async (m: Date): Promise<void> => await db.storeLastSync(lastSyncedKey, m, true);
+const storeChatLastSynced = async (m: Date): Promise<void> => await db.storeLastSync(lastSyncedKey, m);
 
 interface DateRangeRadioGroupItemProps extends RadioGroupItemProps {
     value: DateRange;
@@ -163,6 +165,19 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
 
             t: strings.get(this.getQueryVariable("l")),
             theme: this.getTheme(this.getQueryVariable("theme")),
+
+            exportImportState: {
+                dblogin: "NG",
+                exportDialog: false,
+                exporting: false,
+                importDialog: false,
+                importing: false,
+                processingTable: "",
+                doneCount: 0,
+                allCount: 0,
+                currentProgress: 0,
+                exportImages: true,
+            },
         }
 
         this.msGraphClient = Client.init({ authProvider: this.authProvider });
@@ -175,13 +190,13 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
         // await this.getDataFromDb();
         let { t } = this.state;
 
-        const callBack = () => {
-            db.getLastSync(lastSyncedKey).then(
-                (lastSynced) => {
-                    this.setState({lastSynced});
-                }
-            )
-        };
+        // const callBack = () => {
+        //     db.getLastSync(lastSyncedKey).then(
+        //         (lastSynced) => {
+        //             this.setState({lastSynced});
+        //         }
+        //     )
+        // };
 
         if (await this.inTeams()) {
             microsoftChats.initialize();
@@ -195,31 +210,25 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                 websiteUrl: location.href,
             });
 
-            db.login({client: this.msGraphClient, userPrincipalName: context.loginHint?? "", getLastSync: callBack}).then(
-                async (value) => {
-                    if (value) {
-                        const lastSynced = await db.getLastSync(lastSyncedKey);
-                        this.setState({lastSynced});
-                    }
-                }
-            )
-
+            const newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: context.loginHint?? "", state: this.state.exportImportState});
+    
             t = strings.get(context.locale);
 
             this.setState({
-                t,
-                loginRequired: !haveUserInfo(context.loginHint),
-                lastSynced: await loadChatLastSynced(),
-                teamsInfo: {
-                    entityId: context.entityId,
-                    subEntityId: context.subEntityId ?? null,
-                    loginHint: context.loginHint ?? "",
-                }
-            });
+                    t,
+                    loginRequired: !haveUserInfo(context.loginHint),
+                    lastSynced: await loadChatLastSynced(),
+                    teamsInfo: {
+                        entityId: context.entityId,
+                        subEntityId: context.subEntityId ?? null,
+                        loginHint: context.loginHint ?? "",
+                    },
+                    exportImportState: newExportImportState,
+                });
         } else {
 
-            db.login({client: this.msGraphClient, userPrincipalName: this.state.teamsInfo.loginHint, getLastSync: callBack});
-
+            const newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: this.state.teamsInfo.loginHint, state: this.state.exportImportState});
+    
             this.setState({
                 loginRequired: !haveUserInfo(this.state.teamsInfo.loginHint),
                 lastSynced: await loadChatLastSynced(),
@@ -227,7 +236,8 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                     entityId: "",
                     subEntityId: null,
                     loginHint: this.state.teamsInfo.loginHint,
-                }
+                },
+                exportImportState: newExportImportState,
             });
         }
 
@@ -291,6 +301,16 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
         } = this.state;
         const {hasInfo, info} = getInformation();
 
+        const exportImportCompArg: IExportImportArgs = {
+            lastSyncedKey: lastSyncedKey,
+            exportCallback: async (newState: IExportImportState) => {this.setState({exportImportState: newState});},
+            importCallback: async (newState: IExportImportState, lastSynced: Date) => {this.setState({lastSynced: lastSynced, exportImportState: newState})},
+            otherCallback: (newState: IExportImportState) => {this.setState({exportImportState: newState});},
+            state: {...this.state.exportImportState},
+            translate: this.state.t,
+            exportOptionAvailable: true,
+        }
+
         return (
             <Provider theme={theme}>
                 <Page>
@@ -309,6 +329,8 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                         onConfirm={this.login}
                         content={authResult?.message}
                     />
+
+                    {ExportImportComponents(exportImportCompArg)}
 
                     {hasInfo && info}
 
@@ -581,7 +603,7 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
             lastSynced = du.now();
             await storeChatLastSynced(lastSynced);
             await this.getDataFromDb();
-            this.setState({ syncing: false, lastSynced });
+            this.setState({ syncing: false, lastSynced, exportImportState:{...this.state.exportImportState, exportDialog: true} });
         }
     }
 

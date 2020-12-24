@@ -58,6 +58,7 @@ interface ISavedState {
  * スケジュール検索コンポーネント
  */
 export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
+    protected exportOptionAvailable = true;
     protected isFixedPageSize = false;
     protected showInformation = true;
     protected async setAdditionalState(newstate: ITeamsAuthComponentState, context?: microsoftTeams.Context, inTeams?: boolean): Promise<void> {
@@ -129,7 +130,7 @@ export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
                 this.setError(error, this.state.translation.error.syncFailed);
             }
         } finally {
-            this.setState({ syncing: false, lastSynced });
+            this.setState({ syncing: false, lastSynced, exportImportState:{...this.state.exportImportState, exportDialog: true} });
         }
         log.info(`▲▲▲ startSync END ▲▲▲`);
 

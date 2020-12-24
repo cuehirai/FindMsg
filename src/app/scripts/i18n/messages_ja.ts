@@ -40,6 +40,21 @@ export const messages: IMessageTranslation = {
         syncEntityWithCount: (entityName: string, count: number) => `[${entityName}]を同期中... ${count}`,
         syncSubEntity: (parentName: string, entityName: string) => `[${parentName}]の[${entityName}]を同期中...`,
         syncSubEntityWithCount: (parentName: string, entityName: string, count: number) => `[${parentName}]の[${entityName}]を同期中... ${count}`,
+        confirmExport: 
+            `最新データをエクスポートしますか？\n
+            この処理は数分かかる可能性があります。`,
+        confirmExportOption: `(画像エクスポートを省略すると時間が短縮されます)`,
+        exportProgress: (tableName: string, done: number, all: number, progress: number) => `${tableName}をエクスポート中... ( ${done} / ${all} ) ${progress}% 完了`,
+        confirmImportForNewUser: `データベースにデータをインポートしますか？`,
+        confirmImportNewerData: 
+            `現在のデータよりも新しいエクスポートデータがあります。\n
+            このデータをインポートしますか？`,
+        importProgress: (tableName: string, done: number, all: number, progress: number) => `${tableName}をインポート中.... ( ${done} / ${all} ) ${progress}% 完了`,
+        exportImportMessage: `アプリの終了やタブの移動をしないでください。`,
+        standingBy: `処理を待機しています...`,
+        yes: `はい`,
+        no: `いいえ`,
+        exportImages: `画像をエクスポート`,
     },
 
     entities: {

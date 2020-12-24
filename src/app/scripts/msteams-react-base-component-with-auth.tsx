@@ -18,8 +18,7 @@ import { ICommonMessage } from "./i18n/ICommonMessage";
 import { StoragePermissionIndicator } from "./StoragePermissionIndicator";
 import { StoragePermissionWidget } from "./StoragePermissionWidget";
 import { User } from "@microsoft/microsoft-graph-types";
-import { db } from "./db/Database";
-import { getInformation } from "./ui-jsx";
+import { DatabaseLogin, ExportImportComponents, getInformation, IExportImportArgs, IExportImportState } from "./ui-jsx";
 
 /** ログインユーザのuserPrincipalNameをlocalStorageに保存するキー */
 export const currentLoginHintKey = `${process.env.PACKAGE_NAME}MyLoginHint`;
@@ -117,6 +116,9 @@ export interface ITeamsAuthComponentState extends ITeamsBaseComponentState, Sync
 
     /** クラス固有のステータス */
     me: IMyOwnState;
+
+    /** エクスポート・インポートの制御用ステート */
+    exportImportState: IExportImportState;
 }
 
 /**
@@ -192,6 +194,19 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             askForStoragePermission: false,
             dialogOpen: false,
 
+            exportImportState: {
+                dblogin: "NG",
+                exportDialog: false,
+                exporting: false,
+                importDialog: false,
+                importing: false,
+                processingTable: "",
+                doneCount: 0,
+                allCount: 0,
+                currentProgress: 0,
+                exportImages: true,
+            },
+
             // 派生クラスで独自に定義するプロパティ
             me: this.CreateMyState(),
         }
@@ -203,6 +218,10 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         log.info(`▲▲▲ constructor END ▲▲▲`);
     }
 
+    /**
+     * このページでのエクスポート確認ダイアログにオプションを表示するかどうかを宣言してください。
+     */
+    protected abstract exportOptionAvailable: boolean;
     /**
      * このページの高さが固定(スクロールバーなし)かどうかを宣言してください。
      */
@@ -370,6 +389,18 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         const contentBottom = this.renderContentBottom();
         const {hasInfo, info} = getInformation(this.showInformation);
 
+        const exportImportCompArg: IExportImportArgs = {
+            exportCallback: async (newState: IExportImportState) => {this.setState({exportImportState: newState});},
+            importCallback: async (newState: IExportImportState) => {
+                const lastSynced = await this.GetLastSync();
+                this.setState({lastSynced: lastSynced, exportImportState: newState}, this.initBaseInfo);
+            },
+            otherCallback: (newState: IExportImportState) => {this.setState({exportImportState: newState});},
+            state: {...this.state.exportImportState},
+            translate: this.state.translation,
+            exportOptionAvailable: this.exportOptionAvailable,
+        }
+
         const contentBase = (
             <div>
                 {contentTop}
@@ -398,6 +429,8 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             <Page>
                 {this.requireMicrosoftLogin && loginDialog}
 
+                {ExportImportComponents(exportImportCompArg)}
+
                 {hasInfo && info}
 
                 {contentBase}
@@ -414,6 +447,8 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         const FixedPageBase = (
             <div style={{height: "100vh", overflow: 'hidden'}}>
                 {this.requireMicrosoftLogin && loginDialog}
+
+                {ExportImportComponents(exportImportCompArg)}
 
                 {hasInfo && info}
 
@@ -456,6 +491,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         const teamName = context?.teamName ?? "";
         const channelName = context?.channelName ?? "";
         const translation = strings.get(locale);
+        let newExportImportState = this.state.exportImportState;
 
         microsoftTeams.setFrameContext({
             contentUrl: location.href,
@@ -463,16 +499,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         });
 
         if (this.requireDatabase) {
-            const callBack = () => {
-                log.info(`##### login callback start #####`)
-                this.GetLastSync().then(
-                    (lastSynced) => {
-                        this.setState({lastSynced}, this.setStateCallBack);
-                    }
-                );
-            }
-    
-            await db.login({client: this.msGraphClient, userPrincipalName: loginHint, getLastSync: callBack});
+            newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: loginHint, state: this.state.exportImportState});
         }
 
         const lastSynced = await this.GetLastSync(channelId);
@@ -581,6 +608,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             lastSynced,
             loginRequired: !haveUserInfo(loginHint),
             translation: translation,
+            exportImportState: newExportImportState,
             me: this.setMyState(),
         };
         await this.setAdditionalState(newstate, context, inTeams);

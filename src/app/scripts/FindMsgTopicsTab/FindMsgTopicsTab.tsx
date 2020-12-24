@@ -17,7 +17,7 @@ import * as strings from '../i18n/messages';
 import { IMessageTranslation } from "../i18n/IMessageTranslation";
 import { AI } from '../appInsights';
 import { getTopLevelMessagesLastSynced, topLevelMessagesSyncKey } from "../db/Sync";
-import { getChannelMap, getInformation, IChannelInfo } from "../ui-jsx";
+import { DatabaseLogin, ExportImportComponents, getChannelMap, getInformation, IChannelInfo, IExportImportArgs, IExportImportState } from "../ui-jsx";
 import { db } from "../db/Database";
 
 
@@ -55,6 +55,8 @@ export interface IFindMsgTopicsTabState extends ITeamsBaseComponentState, SyncSt
     t: IMessageTranslation;
 
     channelMap: Map<string, IChannelInfo>;
+
+    exportImportState: IExportImportState;
 }
 
 
@@ -140,6 +142,19 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             theme: this.getTheme(this.getQueryVariable("theme")),
 
             channelMap: new Map<string, IChannelInfo>(),
+
+            exportImportState: {
+                dblogin: "NG",
+                exportDialog: false,
+                exporting: false,
+                importDialog: false,
+                importing: false,
+                processingTable: "",
+                doneCount: 0,
+                allCount: 0,
+                currentProgress: 0,
+                exportImages: true,
+            },
         }
         this.msGraphClient = Client.init({ authProvider: this.authProvider });
     }
@@ -185,15 +200,15 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             websiteUrl: location.href,
         });
 
-        const callBack = () => {
-            db.getLastSync(topLevelMessagesSyncKey).then(
-                (lastSynced) => {
-                    this.setState({lastSynced});
-                }
-            )
-        };
+        // const callBack = () => {
+        //     db.getLastSync(topLevelMessagesSyncKey).then(
+        //         (lastSynced) => {
+        //             this.setState({lastSynced});
+        //         }
+        //     )
+        // };
 
-        await db.login({client: this.msGraphClient, userPrincipalName: loginHint, getLastSync: callBack});
+        const newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: loginHint, state: this.state.exportImportState});
 
         // add lastSynced for top level messages
         const lastSynced = channelId ? await Sync.getChannelLastSynced(channelId) : await getTopLevelMessagesLastSynced();
@@ -283,6 +298,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             loginRequired: !haveUserInfo(loginHint),
             t,
             channelMap,
+            exportImportState: newExportImportState,
         }, this.getMessages);
     }
 
@@ -373,6 +389,18 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
         } = this.state;
         const {hasInfo, info} = getInformation();
 
+        const exportImportCompArg: IExportImportArgs = {
+            lastSyncedKey: topLevelMessagesSyncKey,
+            exportCallback: async (newState: IExportImportState) => {this.setState({exportImportState: newState});},
+            importCallback: async (newState: IExportImportState, lastSynced: Date) => {
+                this.setState({lastSynced: lastSynced, exportImportState: newState}, this.initInfo)
+            },
+            otherCallback: (newState: IExportImportState) => {this.setState({exportImportState: newState});},
+            state: {...this.state.exportImportState},
+            translate: this.state.t,
+            exportOptionAvailable: true,
+        }
+
         return (
             <Provider theme={theme}>
                 <Page>
@@ -391,6 +419,8 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
                         onConfirm={this.login}
                         content={authResult?.message}
                     />
+                    
+                    {ExportImportComponents(exportImportCompArg)}
 
                     {hasInfo && info}
                     
@@ -539,7 +569,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             if (groupId && channelId) {
                 syncResult = await Sync.channelTopLevelMessages(this.msGraphClient, groupId, channelId, throwfn, this.reportProgress, syncProgress);
             } else {
-                syncResult = await Sync.autoSyncAll(this.msGraphClient, false, throwfn, this.reportProgress, syncProgress, true);
+                syncResult = await Sync.autoSyncAll(this.msGraphClient, false, throwfn, this.reportProgress, syncProgress);
             }
 
             if (syncResult) {
@@ -562,7 +592,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
                 this.setError(error, this.state.t.error.syncFailed);
             }
         } finally {
-            this.setState({ syncing: false, lastSynced });
+            this.setState({ syncing: false, lastSynced, exportImportState:{...this.state.exportImportState, exportDialog: true} });
         }
     }
 

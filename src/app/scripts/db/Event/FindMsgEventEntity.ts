@@ -273,7 +273,7 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
                     log.info(`★★★ Events deletion completed`);
                 });
     
-                await this.storeLastSynced(du.now(), true);
+                await this.storeLastSynced(du.now());
     
             }
         } catch (error) {
@@ -333,7 +333,7 @@ class EventEntity<D extends IFindMsgEventDb, T extends IFindMsgEvent, A extends 
                 }));
             });
 
-            await this.storeLastSynced(du.now(), true);
+            await this.storeLastSynced(du.now());
         } catch (error) {
             AI.trackException({
                 exception: error,
