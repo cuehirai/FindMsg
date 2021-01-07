@@ -55,6 +55,10 @@ export const messages: IMessageTranslation = {
         yes: `はい`,
         no: `いいえ`,
         exportImages: `画像をエクスポート`,
+        oneDriveQuotaShorts: (short: number) => 
+            `OneDriveに十分な空き容量がないためエクスポートできませんでした。\n
+            概算で${short}KB以上の空きが必要です。\n
+            ※ゴミ箱を空にする、ファイルの履歴を削除する、などの方法が効果的です。`,
     },
 
     entities: {

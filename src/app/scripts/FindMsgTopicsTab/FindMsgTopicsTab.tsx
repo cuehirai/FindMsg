@@ -146,6 +146,8 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             exportImportState: {
                 dblogin: "NG",
                 exportDialog: false,
+                exportErrorDialog: false,
+                exportErrorMsg: "",
                 exporting: false,
                 importDialog: false,
                 importing: false,
@@ -208,7 +210,8 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
         //     )
         // };
 
-        const newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: loginHint, state: this.state.exportImportState});
+        const callback = (newState: IExportImportState) => {this.setState({exportImportState: newState});};
+        const newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: loginHint, state: this.state.exportImportState, callback: callback});
 
         // add lastSynced for top level messages
         const lastSynced = channelId ? await Sync.getChannelLastSynced(channelId) : await getTopLevelMessagesLastSynced();
@@ -585,6 +588,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
 
             await this.initInfo();
         } catch (error) {
+            log.warn(`syncMessages caught an error [${error}]`);
             if (error instanceof OperationCancelled) {
                 log.info("sync cancelled");
             } else {

@@ -169,6 +169,8 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
             exportImportState: {
                 dblogin: "NG",
                 exportDialog: false,
+                exportErrorDialog: false,
+                exportErrorMsg: "",
                 exporting: false,
                 importDialog: false,
                 importing: false,
@@ -198,6 +200,7 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
         //     )
         // };
 
+        const callback = (newState: IExportImportState) => {this.setState({exportImportState: newState});};
         if (await this.inTeams()) {
             microsoftChats.initialize();
             microsoftChats.registerOnThemeChangeHandler(this.updateTheme);
@@ -210,7 +213,7 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                 websiteUrl: location.href,
             });
 
-            const newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: context.loginHint?? "", state: this.state.exportImportState});
+            const newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: context.loginHint?? "", state: this.state.exportImportState, callback: callback});
     
             t = strings.get(context.locale);
 
@@ -227,7 +230,7 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                 });
         } else {
 
-            const newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: this.state.teamsInfo.loginHint, state: this.state.exportImportState});
+            const newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: this.state.teamsInfo.loginHint, state: this.state.exportImportState, callback: callback});
     
             this.setState({
                 loginRequired: !haveUserInfo(this.state.teamsInfo.loginHint),

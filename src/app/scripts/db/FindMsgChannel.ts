@@ -42,27 +42,33 @@ export class FindMsgChannel {
             return null;
         }
 
-        const id = assert(channel.id);
-        let delta = invalidDate();
-        let full = invalidDate();
-
-        if (getSyncDateFromDb) {
-            const dbChannel = await db.channels.get(id);
-            if (dbChannel) {
-                delta = numberToDate(dbChannel.lastDeltaUpdate);
-                full = numberToDate(dbChannel.lastFullMessageSync);
+        try {
+            const id = assert(channel.id, nameof(channel.id));
+            const displayName = assert(channel.displayName, nameof(channel.displayName))
+            let delta = invalidDate();
+            let full = invalidDate();
+    
+            if (getSyncDateFromDb) {
+                const dbChannel = await db.channels.get(id);
+                if (dbChannel) {
+                    delta = numberToDate(dbChannel.lastDeltaUpdate);
+                    full = numberToDate(dbChannel.lastFullMessageSync);
+                }
             }
+    
+            return {
+                id: id,
+                displayName: displayName,
+                description: channel.description || null,
+                webUrl: channel.webUrl ?? "",
+                lastDeltaUpdate: delta,
+                lastFullMessageSync: full,
+                teamId,
+            };
+        } catch (e) {
+            warn(`Ignored channel [${channel.displayName}] (id=${channel.id}) due to error [${e.message}]`);
+            return null;
         }
-
-        return {
-            id: assert(channel.id, nameof(channel.id)),
-            displayName: assert(channel.displayName, nameof(channel.displayName)),
-            description: channel.description || null,
-            webUrl: channel.webUrl ?? "",
-            lastDeltaUpdate: delta,
-            lastFullMessageSync: full,
-            teamId,
-        };
     }
 
 

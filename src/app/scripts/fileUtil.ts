@@ -1,5 +1,5 @@
 import { Client } from "@microsoft/microsoft-graph-client";
-import { DriveItem, UploadSession } from "@microsoft/microsoft-graph-types";
+import { Drive, DriveItem, UploadSession } from "@microsoft/microsoft-graph-types";
 import { getAllPages } from "./graph/getAllPages";
 import * as log from './logger';
 
@@ -13,6 +13,22 @@ const reformPathString = (path?: string | null | undefined) => {
 
 /** ファイル操作ユーティリティクラス */
 class Util {
+
+    /**
+     * ログインユーザのDriveリソースを取得します。
+     * @param client MicrosoftGraphクライアント
+     */
+    public async getDrive(client: Client): Promise<Drive | null> {
+        let res: Drive | null = null;
+        try {
+            const address = `me/drive`;
+            log.info(`★★★ requesting api(get): [${address}] ★★★`);
+            res = await client.api(address).get();
+        } catch (e) {
+            log.warn(`getDrive failed: error = [${e}]`);
+        }
+        return res;
+    }
 
     /**
      * 指定フォルダにあるドライブ項目(フォルダ/ファイル)をすべて取得します。
@@ -326,13 +342,13 @@ class Util {
         // バックアップフォルダ（存在しなければ作成）の中のアイテムをすべて削除
         const bkPath = `${folderPath}/${backupFolder}`
         const oldBk = await this.getItems(client, bkPath, true)
-        oldBk.forEach(async (item) => {
+        await Promise.all(oldBk.map(async (item) => {
             item.name && this.deleteFile(client, item.name, bkPath)
-        })
+        }))
 
         // バックアップ対象フォルダ内の全アイテムをバックアップフォルダに移動
         const bkFolder = await this.getFolder(client, bkPath, true);
-        bkFolder && items.forEach(async (item) => {
+        bkFolder && await Promise.all(items.map(async (item) => {
             // ただしバックアップフォルダ自体は移動してはいけない
             if (item.id != bkFolder.id) {
                 const driveItem = {
@@ -350,9 +366,52 @@ class Util {
                     log.error(`backupFolder failed to move file [${item.name}]: [${e}]`);    
                 }
             }
-        })
+        }))
 
         // log.info(`▲▲▲ backupFolder END folderName: [${folderPath}] backupFolder: [${backupFolder}] ▲▲▲`);
+        return res;
+    }
+
+    /**
+     * バックアップフォルダ内のファイルからフォルダ内を復旧します。バックアップフォルダは空になります。
+     * @param client MicrosoftGraphクライアント
+     * @param folderPath リストアしたいフォルダのパス(パス区切り文字は「/」)※パスを省略するとrootを取得します。またパスを指定する際はrootは省略可能です。
+     * @param backupFolder バックアップフォルダ名※バックアップフォルダはリストア対象フォルダ内にあることが前提です。存在しなければ作成します。
+     */
+    public async restoreFromBackup(client: Client, folderPath: string, backupFolder: string): Promise<boolean> {
+        let res = true;
+        // バックアップフォルダ（存在しなければ作成）にあるアイテム
+        const bkPath = `${folderPath}/${backupFolder}`
+        const bkFolder = await this.getFolder(client, bkPath, true);
+        const oldBk = await this.getItems(client, bkPath, true)
+
+        if (bkFolder) {
+            // リストア対象フォルダ内のアイテムはすべて削除
+            const items = await this.getItems(client, folderPath, true);
+            await Promise.all(items.map(async(item) => {
+                if (item.id !== bkFolder.id) {
+                    item.name && await this.deleteFile(client, item.name, folderPath);
+                }
+            }))
+            // バックアップフォルダ内の全ファイルをリストア対象フォルダに移動
+            const folder = await this.getFolder(client, folderPath, true);
+            folder && await Promise.all(oldBk.map(async (item) => {
+                const driveItem = {
+                    parentReference: {
+                        id: folder.id
+                    },
+                    name: item.name,
+                }
+                try {
+                    const address = `/me/drive/items/${item.id}`;
+                    log.info(`★★★ requesting api(update): [${address}] ★★★`);
+                    await client.api(address).update(driveItem);                    
+                } catch (e) {
+                    res = false;
+                    log.error(`restoreFromBackup failed to move file [${item.name}]: [${e}]`);    
+                }
+            }))    
+        }
         return res;
     }
 
