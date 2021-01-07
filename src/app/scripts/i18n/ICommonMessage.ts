@@ -69,4 +69,6 @@ export interface ICommonMessage {
     no: string;
     /** 画像をエクスポート */
     exportImages: string;
+    /** OneDriveに十分な空き容量がありません。最低でもあと${short}KBの空きが必要です。※ゴミ箱を空にする、AppData内のファイルの履歴を削除する、などの方法が効果的です。 */
+    oneDriveQuotaShorts: (short: number) => string;
 }

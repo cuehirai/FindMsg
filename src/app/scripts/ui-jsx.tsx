@@ -145,7 +145,7 @@ export const getInformation = (showInfo?: boolean): {hasInfo: boolean, info: JSX
                     res = 
                         {hasInfo: true,
                             info: (<div style={{ width: '100%', maxHeight: 100, overflow: "scroll", 
-                                    borderWidth: "medium", borderColor: "lightyellow", borderStyle: "solid"}}>
+                                    borderWidth: "medium", borderColor: "lightgray", borderStyle: "solid"}}>
                                     <span dangerouslySetInnerHTML = {{__html: text.toString("utf-8")}} />
                             </div>)
                         };
@@ -203,6 +203,10 @@ export interface IExportImportState {
      * という風に、「true」を設定してください。
      */
     exportDialog: boolean;
+    /** エクスポート時のエラーダイアログオープンフラグ（初期値：false）※アプリで意識する必要はありません */
+    exportErrorDialog: boolean;
+    /** エクスポート時のエラーダイアログのメッセージ（初期値：""）※アプリで意識する必要はありません */
+    exportErrorMsg: string;
     /** 
      * インポート確認ダイアログオープンフラグ（初期値：false）
      * ※DatabaseLoginによりDBにログインすればアプリで意識する必要はありません
@@ -228,12 +232,18 @@ export interface IExportImportState {
  * インポート確認を自動化したデータベースログインシーケンス
  * ※db.loginを直接呼び出さずこのメソッドを呼び出し、戻り値のIExportImportStateでsetStateしてください。
  */
-export const DatabaseLogin = async(args: {client: Client, userPrincipalName: string, state: IExportImportState}): Promise<IExportImportState> => {
+export const DatabaseLogin = async(args: {client: Client, userPrincipalName: string, state: IExportImportState, callback: (newState: IExportImportState) => void}): Promise<IExportImportState> => {
     const res: IExportImportState = {...args.state};
-    res.dblogin = await db.login({client: args.client, userPrincipalName: args.userPrincipalName});
-    if (res.dblogin === "RECOMMEND_IMPORT" || res.dblogin === "SHOULD_IMPORT") {
-        res.importDialog = true;
+
+    const resultCallback = (result: DbLoginResult): void => {
+        const newState: IExportImportState = {...res};
+        if (result === "RECOMMEND_IMPORT" || result === "SHOULD_IMPORT") {
+            newState.dblogin = result;
+            newState.importDialog = true;
+            args.callback(newState);
+        }
     }
+    res.dblogin = await db.login({client: args.client, userPrincipalName: args.userPrincipalName, resultCallback: resultCallback});
     return res;
 }
 
@@ -255,9 +265,13 @@ export const ExportImportComponents = (args: IExportImportArgs): JSX.Element => 
         return {...args.state};
     }
 
-    const exportCallback = async () => {
+    const exportCallback = async (message: number) => {
         const newState = cloneState();
         newState.exporting = false;
+        if (message > 0) {
+            newState.exportErrorDialog = true;
+            newState.exportErrorMsg = args.translate.common.oneDriveQuotaShorts(message);
+        }
         await args.exportCallback(newState);
     }
 
@@ -290,6 +304,13 @@ export const ExportImportComponents = (args: IExportImportArgs): JSX.Element => 
         db.export({includeImages: args.state.exportImages, progressCallback: progressCallback, callback: exportCallback })
         const newState = cloneState();
         args.otherCallback(newState);
+    }
+
+    const handleExportErrorDialogClose = () => {
+        const newState = cloneState();
+        newState.exportErrorDialog = false;
+        newState.exportErrorMsg = "";
+        args.otherCallback(newState);         
     }
 
     const importDialogMessage = () => {
@@ -363,6 +384,19 @@ export const ExportImportComponents = (args: IExportImportArgs): JSX.Element => 
                     </Button>
                     <Button onClick={handleExportDialogOk} color="primary">
                         {args.translate.common.yes}
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={args.state.exportErrorDialog} onClose={handleExportErrorDialogClose} aria-labelledby="form-dialog-title">
+                <DialogContent>
+                    <DialogContentText>
+                        {getMessage(args.state.exportErrorMsg)}
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleExportErrorDialogClose} color="primary">
+                        OK
                     </Button>
                 </DialogActions>
             </Dialog>

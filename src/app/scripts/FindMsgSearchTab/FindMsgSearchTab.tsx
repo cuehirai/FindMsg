@@ -198,6 +198,8 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
             exportImportState: {
                 dblogin: "NG",
                 exportDialog: false,
+                exportErrorDialog: false,
+                exportErrorMsg: "",
                 exporting: false,
                 importDialog: false,
                 importing: false,
@@ -221,6 +223,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
 
         let newExportImportState = this.state.exportImportState;
 
+        const callback = (newState: IExportImportState) => {this.setState({exportImportState: newState});};
         if (await this.inTeams(2000)) {
             microsoftTeams.initialize();
             microsoftTeams.registerOnThemeChangeHandler(this.updateTheme);
@@ -233,7 +236,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                 websiteUrl: location.href,
             });
 
-            newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: context.loginHint?? "", state: this.state.exportImportState});
+            newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: context.loginHint?? "", state: this.state.exportImportState, callback: callback});
 
             t = strings.get(context.locale);
 
@@ -248,7 +251,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
                 }
             });
  */     } else {
-            newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: this.state.teamsInfo.loginHint, state: this.state.exportImportState});
+            newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: this.state.teamsInfo.loginHint, state: this.state.exportImportState, callback: callback});
             
             this.initInfo();
     /*             this.setState({

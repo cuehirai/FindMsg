@@ -197,6 +197,8 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             exportImportState: {
                 dblogin: "NG",
                 exportDialog: false,
+                exportErrorDialog: false,
+                exportErrorMsg: "",
                 exporting: false,
                 importDialog: false,
                 importing: false,
@@ -499,7 +501,8 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
         });
 
         if (this.requireDatabase) {
-            newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: loginHint, state: this.state.exportImportState});
+            const callback = (newState: IExportImportState) => {this.setState({exportImportState: newState});};
+            newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: loginHint, state: this.state.exportImportState, callback: callback});
         }
 
         const lastSynced = await this.GetLastSync(channelId);

@@ -165,12 +165,14 @@ export class Sync {
      */
     @log.traceAsync(true)
     static async autoSyncAll(client: Client, includeReplies: boolean, checkCancel: throwFn = nop, progress: progressFn = nop, { teamList, channelList, topLevelMessages, replies }: ISyncProgressTranslation): Promise<boolean> {
+        log.info(`##### autoSyncAll START #####`);
         let success = true;
 
         if (await this.isTeamListStale()) {
             progress(teamList);
             success = success && await Sync.syncTeamList(client);
         }
+        log.info(`##### autoSyncAll ==> syncTeamList completed #####`);
 
         const teams = await FindMsgTeam.getAll();
         for (const team of teams.filter(Sync.isChannelListStale)) {
@@ -178,6 +180,7 @@ export class Sync {
             progress(channelList(team.displayName));
             success = success && await Sync.syncChannelList(client, team);
         }
+        log.info(`##### autoSyncAll ==> syncChannelList completed #####`);
 
         const channels = await FindMsgChannel.getAll();
         for (const channel of channels.filter(Sync.shouldSyncMessages)) {
@@ -185,6 +188,7 @@ export class Sync {
             let synced = 0;
             success = success && await Sync.syncTopLevelMessages(client, channel, checkCancel, n => progress(topLevelMessages(channel.displayName, synced += n)));
         }
+        log.info(`##### autoSyncAll ==> syncTopLevelMessages completed #####`);
         await setTopLevelMessagesLastSynced(await FindMsgChannel.getOldestSync());
 
         if (includeReplies) {
@@ -200,7 +204,9 @@ export class Sync {
                         checkCancel();
                         synced = await Sync.syncMessageRepliesBatch(client, channel, batchSize, checkCancel, reportCount);
                     } while (synced === batchSize);
+                    log.info(`##### autoSyncAll ==> syncMessageRepliesBatch completed #####`);
                 } catch (error) {
+                    log.warn(`autoSyncAll thrown an error [${error}]`);
                     AI.trackException({
                         exception: error,
                         properties: {
@@ -213,6 +219,7 @@ export class Sync {
                 }
             }
         }
+        log.info(`##### autoSyncAll END #####`);
 
         return success;
     }
@@ -229,6 +236,7 @@ export class Sync {
      */
     @log.traceAsync(true)
     static async channelTopLevelMessages(client: Client, teamId: string, channelId: string, checkCancel: throwFn = nop, progress: progressFn = nop, { teamList, channelList, topLevelMessages }: ISyncProgressTranslation): Promise<boolean> {
+        log.info(`##### channelTopLevelMessages START #####`);
         let success = true;
 
         let team = await FindMsgTeam.get(teamId);
@@ -238,6 +246,7 @@ export class Sync {
             team = await FindMsgTeam.get(teamId);
             if (!team) throw new Error(`Team not found: [${channelId}]`);
         }
+        log.info(`##### channelTopLevelMessages ==> syncTeamList completed #####`);
 
         let channel = await FindMsgChannel.get(channelId);
         if (!channel || Sync.isChannelListStale(team)) {
@@ -247,6 +256,7 @@ export class Sync {
             channel = await FindMsgChannel.get(channelId);
             if (!channel) throw new Error(`Channel not found: [${channelId}]`);
         }
+        log.info(`##### channelTopLevelMessages ==> syncChannelList completed #####`);
 
         if (Sync.shouldSyncMessages(channel)) {
             checkCancel();
@@ -255,6 +265,7 @@ export class Sync {
             const report = (n: number) => progress(topLevelMessages(channelName, accumulator += n));
             success = success && await Sync.syncTopLevelMessages(client, channel, checkCancel, report);
         }
+        log.info(`##### channelTopLevelMessages END #####`);
 
         return success;
     }
@@ -321,9 +332,11 @@ export class Sync {
      */
     @log.traceAsync()
     private static async syncChannelList(client: Client, team: IFindMsgTeam): Promise<boolean> {
+        log.info(`##### syncChannelList START for team [${team.displayName}] #####`);
         const fetchedChannels = await Sync.fetchChannelList(client, team);
 
         if (fetchedChannels === null) {
+            log.info(`##### syncChannelList END: API returned null for team [${team.displayName}]`);
             return false;
         } else {
             log.info(`API returned ${fetchedChannels.length} channels for team [${team.displayName}]`);
@@ -336,6 +349,8 @@ export class Sync {
                 await FindMsgTeam.put(team);
             });
 
+            log.info(`##### syncChannelList END #####`);
+
             return true;
         }
     }
@@ -347,6 +362,7 @@ export class Sync {
             // const response = await client.api(`/teams/${team.id}/channels`).version('v1.0').get();
             return await getAllPages<Channel>(client, response);
         } catch (error) {
+            log.warn(`fetchChannelList for team [${team.displayName}] thrown an error [${error}]`);
             AI.trackException({
                 exception: error,
                 properties: {

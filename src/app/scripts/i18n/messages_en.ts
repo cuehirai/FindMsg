@@ -55,6 +55,10 @@ export const messages: IMessageTranslation = {
         yes: `yes`,
         no: `no`,
         exportImages: `export image data`,
+        oneDriveQuotaShorts: (short: number) => 
+            `Export failed since remaining quota in OneDrive is not sufficient.\n
+            ${short}KB or more required to export.\n
+            * Empty the trash, or delete all history for the files may be efficient.`,
     },
 
     entities: {

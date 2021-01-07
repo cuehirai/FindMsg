@@ -332,9 +332,8 @@ class Database extends Dexie {
      * @param client Graphクライアント
      * @param userPrincipalName ログインヘルプ
      */
-    async login(arg: {client: Client, userPrincipalName: string}): Promise<DbLoginResult> {
+    async login(arg: {client: Client, userPrincipalName: string, resultCallback: (result: DbLoginResult) => void}): Promise<DbLoginResult> {
         info(`▼▼▼ Database.login START ▼▼▼`);
-        let res: DbLoginResult = "OK";
 
         const getFileIndex = async (): Promise<IExportIndexFile | null> => {
             let res: IExportIndexFile | null = null;
@@ -352,24 +351,18 @@ class Database extends Dexie {
             return res;
         };
 
-        this.msGraphClient = arg.client;
-        if (arg.userPrincipalName != this.userPrincipalName) {
-            info(`★★★ Login user changed [${this.userPrincipalName}] => [${arg.userPrincipalName}] ★★★`);
-            // アプリへの初回ログインまたはユーザが変わった場合=>SHOULD_IMPORT
-            if (this.userPrincipalName !== "") {
-                // ユーザが変わった場合は強制的にクリア
-                await this.clear();
-            }
-            this.userPrincipalName = arg.userPrincipalName;
-            localStorage.setItem(this.lastUserKey(), arg.userPrincipalName);
+        const userChanged = async (): Promise<void> => {
             const index = await getFileIndex();
             if (index) {
                 this.serverFiles = index;
-                res = "SHOULD_IMPORT";
+                arg.resultCallback("SHOULD_IMPORT");
             } else {
                 this.serverFiles = null;
+                arg.resultCallback("OK");
             }
-        } else {
+        }
+
+        const checkIndex = async (): Promise<void> => {
             // 同じユーザが使い続けている場合、現在のデバイス/ブラウザで最後にエクスポートまたはインポートした日付よりも
             // エクスポートファイルの最終更新日時が新しければリロードを勧める
             // ※他のデバイス/ブラウザで同期・エクスポートした内容を取り込む想定
@@ -402,16 +395,33 @@ class Database extends Dexie {
                 info(`★★★ lastExport:[${lastExport()}] lastImport:[${lastImport()}] lastModified:[${exported}] ★★★`);
                 if (!du.isValid(latest) || exported > latest) {
                     info(`★★★ user had better import!! ★★★`);
-                    res = "RECOMMEND_IMPORT";
+                    arg.resultCallback("RECOMMEND_IMPORT");
                 } else {
                     info(`★★★ should be no need to import ★★★`);
-                }    
+                    arg.resultCallback("OK");
+                }
             } else {
                 this.serverFiles = null;
+                arg.resultCallback("OK");
             }
+        }
+
+        this.msGraphClient = arg.client;
+        if (arg.userPrincipalName != this.userPrincipalName) {
+            info(`★★★ Login user changed [${this.userPrincipalName}] => [${arg.userPrincipalName}] ★★★`);
+            // アプリへの初回ログインまたはユーザが変わった場合=>SHOULD_IMPORT
+            if (this.userPrincipalName !== "") {
+                // ユーザが変わった場合は強制的にクリア
+                await this.clear();
+            }
+            this.userPrincipalName = arg.userPrincipalName;
+            localStorage.setItem(this.lastUserKey(), arg.userPrincipalName);
+            userChanged();
+        } else {
+            checkIndex();
         }    
         info(`▲▲▲ Database.login END ▲▲▲`);
-        return res;
+        return "OK";
     }
 
     /**
@@ -435,7 +445,7 @@ class Database extends Dexie {
      * @param date 同期実行した日時
      * @param doExport trueを指定するとDBエクスポートを実施します(省略値はfalse)
      */
-    async storeLastSync(id: string, date: Date, doExport?: boolean, progressCallback?: (tableName: string, progress: number) => void, callback?: () => void): Promise<void> {
+    async storeLastSync(id: string, date: Date, doExport?: boolean, progressCallback?: (tableName: string, progress: number) => void, callback?: (message: number) => void): Promise<void> {
         info(`▼▼▼ storeLastSync START... ID: [${id}] date: [${date}] doExport: [${doExport}] ▼▼▼`);
         await this.transaction("rw", this.lastsync, async() => {
             const rec: ITableLastSync = {id: id, lastSync: du.dateToNumber(date)};
@@ -471,62 +481,101 @@ class Database extends Dexie {
      * @param exportTo 既定のエクスポートパスと異なる場所に保存したい場合に指定するパス文字列です
      * @param callback 全テーブルのエクスポートが完了した時点で呼び出されるコールバックです
      */
-    async export(arg: {syncDatetime?: Date, exportTo?: string, includeImages: boolean, progressCallback?: (tableName: string, done: number, all: number, progress: number) => void, callback?: () => void}): Promise<boolean> {
+    async export(arg: {syncDatetime?: Date, exportTo?: string, includeImages: boolean, progressCallback?: (tableName: string, done: number, all: number, progress: number) => void, callback?: (message: number) => void}): Promise<boolean> {
         info(`▼▼▼ export START ▼▼▼`);
         let res = false;
+        let message = 0;
 
         if (!this.msGraphClient) {
             warn(`Database is not logged in!`);
         } else {
-            const exportPath = arg.exportTo?? this.exportfilePath();
-            const files: IFile[] = [];
-
-            // Export処理本体    
             const client = this.msGraphClient;
-            let allCount = 0
-            await Promise.all(
-                this.tables.map(async table => {
-                    if (arg.includeImages || table.name !== this.images.name) {
-                        const recs = await table.toArray();
-                        allCount += recs.length;    
+            const maxMem = 15728640;
+
+            // OneDriveに必要な容量が残っているかをチェック
+            let required = 0;
+            let remain = 0;
+            try {
+                const drive = await FileUtil.getDrive(client);
+                remain = drive? drive.quota? drive.quota.remaining?? 0 : 0 : 0;
+
+                const exportPath = arg.exportTo?? this.exportfilePath();
+                const files: IFile[] = [];
+
+                // 既存のエクスポートファイルをバックアップ
+                const bkup = await FileUtil.backupFolder(client, exportPath, "bkup")
+    
+                // Export処理本体    
+                let allCount = 0
+                await Promise.all(
+                    this.tables.map(async table => {
+                        if (arg.includeImages || table.name !== this.images.name) {
+                            const recs = await table.count();
+                            info(`@@@@@ table [${table.name}].count() = [${recs}] @@@@@`)
+                            allCount += recs;
+                        }
+                    })    
+                )
+                let doneCount = 0
+                const progPercent = () => {
+                    let res = 0;
+                    if (allCount !==0) {
+                        res = Math.floor(doneCount / allCount * 100);
                     }
-                })    
-            )
-            let doneCount = 0
-            const progPercent = () => {
-                let res = 0;
-                if (allCount !==0) {
-                    res = Math.floor(doneCount / allCount * 100);
+                    return res;
                 }
-                return res;
-            }
+    
+                const exportTables = async(client: Client): Promise<boolean> => {
+                    let res = true;
+                    await Promise.all(this.tables.map(async (table) => {
+                        if (arg.includeImages || table.name !== this.images.name) {
+                            if ( !(await exportToFiles(client, table)) ) {
+                                res = false;
+                                warn(`exportToFiles failed`);
+                            }    
+                        }
+                    }));
+                    info(`@@@@@ calculated quota required: [${required}] current remaining in OneDrive: [${remain}] @@@@@`);
 
-            const exportTables = async(client: Client): Promise<boolean> => {
-                let res = true;
-                await Promise.all(this.tables.map(async (table) => {
-                    if (arg.includeImages || table.name !== this.images.name) {
-                        if ( !(await exportToFiles(client, table)) ) {
-                            res = false;
-                            warn(`exportToFiles failed`);
-                        }    
-                    }
-                }));
-                return res;
-            }
-
-            const exportToFiles = async(client: Client, table: Dexie.Table): Promise<boolean> => {
-                let res = true;
-
-                let arr: Array<any> = [];
-                let fileNo = 0;
-
-                await table.each(async (rec) => {
-                    arr.push(rec);
-                    doneCount += 1;
-                    let mem = sizeof(arr);
-                    // メモリサイズが15MBを超えたらいったんファイルに出力
-                    if (sizeof(arr) > 15728640) {
-                        info(`@@@@@ current memory size of output record array: ${mem} @@@@@`);
+                    return res;
+                }
+    
+                const exportToFiles = async(client: Client, table: Dexie.Table): Promise<boolean> => {
+                    let res = true;
+    
+                    let arr: Array<any> = [];
+                    let fileNo = 0;
+    
+                    await table.each(async (rec) => {
+                        arr.push(rec);
+                        doneCount += 1;
+                        let mem = sizeof(arr);
+                        // メモリサイズが15MBを超えたらいったんファイルに出力
+                        if (sizeof(arr) > maxMem) {
+                            info(`@@@@@ current memory size of output record array: ${mem} @@@@@`);
+                            const fileName = this.exportfileName(table.name, fileNo++);
+                            // files.push(fileName);
+                            const content: IExportFile = {
+                                table: table.name,
+                                data: arr,
+                            };
+                            const jsonString = JSON.stringify(content);
+                            // const compressed = compress(jsonString);
+                            required += jsonString.length;
+                            files.push({file: fileName, compressed: false});
+                            arr = [];
+                            mem = sizeof(arr);
+                            info(`@@@@@ memory size of output record array after clear: ${mem} @@@@@`);
+                            if (await FileUtil.writeFile(client, fileName, jsonString, exportPath, true)) {
+                                arg.progressCallback && arg.progressCallback(table.name, doneCount, allCount, progPercent());
+                                info(`@@@@@ file [${fileName}] written into OneDrive @@@@@`);
+                            } else {
+                                res = false;
+                                warn(`@@@@@ write file [${fileName}] into OnDrive failed @@@@@`)
+                            }
+                        }
+                    })
+                    if (arr.length > 0) {
                         const fileName = this.exportfileName(table.name, fileNo++);
                         // files.push(fileName);
                         const content: IExportFile = {
@@ -535,63 +584,55 @@ class Database extends Dexie {
                         };
                         const jsonString = JSON.stringify(content);
                         // const compressed = compress(jsonString);
+                        required += jsonString.length;
                         files.push({file: fileName, compressed: false});
-                        arr = [];
-                        mem = sizeof(arr);
-                        info(`@@@@@ memory size of output record array after clear: ${mem} @@@@@`);
                         if (await FileUtil.writeFile(client, fileName, jsonString, exportPath, true)) {
-                            arg.progressCallback && arg.progressCallback(table.name, doneCount, allCount, progPercent());
                             info(`@@@@@ file [${fileName}] written into OneDrive @@@@@`);
                         } else {
                             res = false;
                             warn(`@@@@@ write file [${fileName}] into OnDrive failed @@@@@`)
                         }
-                    }
-                })
-                if (arr.length > 0) {
-                    const fileName = this.exportfileName(table.name, fileNo++);
-                    // files.push(fileName);
-                    const content: IExportFile = {
-                        table: table.name,
-                        data: arr,
-                    };
-                    const jsonString = JSON.stringify(content);
-                    // const compressed = compress(jsonString);
-                    files.push({file: fileName, compressed: false});
-                    if (await FileUtil.writeFile(client, fileName, jsonString, exportPath, true)) {
                         arg.progressCallback && arg.progressCallback(table.name, doneCount, allCount, progPercent());
-                        info(`@@@@@ file [${fileName}] written into OneDrive @@@@@`);
-                    } else {
-                        res = false;
-                        warn(`@@@@@ write file [${fileName}] into OnDrive failed @@@@@`)
                     }
+    
+                    return res;
                 }
-
-                return res;
-            }
-
-            await exportTables(client).then(
-                async (value) => {
-                    if (value) {
-                        res = true;
-                        const lastExport = arg.syncDatetime?? du.now();
-
-                        const index: IExportIndexFile = {exported: du.formatISO(lastExport), files: files};
-                        const indexFile = JSON.stringify(index);
-                        await FileUtil.writeFile(client, this.exportIndexName(), indexFile, exportPath, true);
-                        if (this.userPrincipalName != "") {
-                            localStorage.setItem(this.lastExportKey(), du.formatISO(lastExport));
+    
+                await exportTables(client).then(
+                    async (value) => {
+                        if (value) {
+                            res = true;
+                            const lastExport = arg.syncDatetime?? du.now();
+    
+                            const index: IExportIndexFile = {exported: du.formatISO(lastExport), files: files};
+                            const indexFile = JSON.stringify(index);
+                            await FileUtil.writeFile(client, this.exportIndexName(), indexFile, exportPath, true);
+                            if (this.userPrincipalName != "") {
+                                localStorage.setItem(this.lastExportKey(), du.formatISO(lastExport));
+                            }
+                        } else {
+                            // バックアップが成功していたならリストア（ロールバックに近い）
+                            if (bkup) {
+                                await FileUtil.restoreFromBackup(client, exportPath, "bkup");
+                            }
+                            // 計算上容量が足りていなかった場合はメッセージ出力
+                            if (remain < required) {
+                                message = Math.ceil(required / 1024);
+                            }    
                         }
                     }
-                }
-            ).catch(
-                (reason) => {
-                    warn(`exportTables failed: reason [${reason}]`);
-                }
-            )    
+                ).catch(
+                    async (reason) => {
+                        warn(`exportTables failed: reason [${reason}]`);
+                    }
+                )                    
+            } catch (e) {
+                warn(`export failed: error [${e}]`);
+            }
         }
 
-        arg.callback && arg.callback();
+        arg.callback && arg.callback(message);
+
         info(`▲▲▲ export END ▲▲▲`);
 
         return res;
@@ -607,83 +648,88 @@ class Database extends Dexie {
         const importFrom = arg.importFrom?? this.exportfilePath();
         info(`▼▼▼ import START importFrom: [${importFrom}] ▼▼▼ `);
 
-        const allCount = this.serverFiles? this.serverFiles.files? this.serverFiles.files.length : 0 :0;
-        let doneCount = 0
-        const progPercent = () => {
-            let res = 0;
-            if (allCount !== 0) {
-                res = Math.floor(doneCount / allCount * 100);
+        try {
+            const allCount = this.serverFiles? this.serverFiles.files? this.serverFiles.files.length : 0 : 0;
+            let doneCount = 0
+            const progPercent = () => {
+                let res = 0;
+                if (allCount !== 0) {
+                    res = Math.floor(doneCount / allCount * 100);
+                }
+                return res;
             }
-            return res;
-        }
-
-        const importContent = async(fileName: string, compressed: boolean, content: string) => {
-            try {
-                let fileObj: IExportFile | null = null;
-                if (compressed) {
-                    const decomp = content;
-                    if (decomp) {
-                        fileObj = JSON.parse(decomp);
+    
+            const importContent = async(fileName: string, compressed: boolean, content: string) => {
+                try {
+                    let fileObj: IExportFile | null = null;
+                    if (compressed) {
+                        const decomp = content;
+                        if (decomp) {
+                            fileObj = JSON.parse(decomp);
+                        } else {
+                            warn(`failed to decompress data`)
+                        }
                     } else {
-                        warn(`failed to decompress data`)
+                        fileObj = JSON.parse(content);
                     }
-                } else {
-                    fileObj = JSON.parse(content);
-                }
-                if (fileObj) {
-                    if (fileObj.table && fileObj.data) {
-                        info(`@@@@@ importing file [${fileName}] into table [${fileObj.table}] @@@@@`);
-                        const table = this.table(fileObj.table);
-                        await table.bulkPut(fileObj.data);
-                        if (this.userPrincipalName != "") {
-                            localStorage.setItem(this.lastImportKey(), du.formatISO(du.now()));
-                        }
-                        doneCount += 1;
-                        arg.progressCallback && arg.progressCallback(table.name, doneCount, allCount, progPercent())
-                        info(`@@@@@ file [${fileName}] imported into table [${fileObj.table}] @@@@@`);
-                    }    
-                }
-            } catch (e) {
-                warn(`failed to import file [${fileName}]; error [${e}]`);
-            }
-        }
-        
-        if (!this.msGraphClient) {
-            warn(`Database is not logged in!`);
-        } else {
-            // インポートすべきファイルがあるかどうかを確認
-            const client = this.msGraphClient;
-            if (!(this.serverFiles) || !this.serverFiles.files || this.serverFiles.files.length == 0) {
-                info(`***** assumed as old version export files`);
-                // インデックスファイルが指定されていない/インデックスファイルにファイル一覧がない場合は旧バージョンエクスポートファイルとみなし
-                // ディレクトリ内のファイルをすべてインポートする（圧縮なし）
-                const items = await FileUtil.getItems(client, importFrom, true);
-                await Promise.all(
-                    items.map(async item =>{
-                        if (item.file && item.name && item.name != this.exportIndexName()) {
-                            const content = await FileUtil.readFile(client, item.name, importFrom);
-                            if (content) {
-                                await importContent(item.name, false, content);
+                    if (fileObj) {
+                        if (fileObj.table && fileObj.data) {
+                            info(`@@@@@ importing file [${fileName}] into table [${fileObj.table}] @@@@@`);
+                            const table = this.table(fileObj.table);
+                            await table.bulkPut(fileObj.data);
+                            if (this.userPrincipalName != "") {
+                                localStorage.setItem(this.lastImportKey(), du.formatISO(du.now()));
                             }
+                            doneCount += 1;
+                            arg.progressCallback && arg.progressCallback(table.name, doneCount, allCount, progPercent())
+                            info(`@@@@@ file [${fileName}] imported into table [${fileObj.table}] @@@@@`);
                         }    
-                    })
-                )    
-            } else {
-                info(`***** assumed as new version (compressed) export files`);
-                // インデックスファイルのファイル一覧にデータがある場合は指定されているファイルをインポートする（圧縮：指定に従う）
-                await Promise.all(
-                    this.serverFiles.files.map(async file => {
-                        const content = await FileUtil.readFile(client, file.file, importFrom);
-                        if (content) {
-                            await importContent(file.file, file.compressed, content);
-                        }
-                    })
-                )
+                    }
+                } catch (e) {
+                    warn(`failed to import file [${fileName}]; error [${e}]`);
+                }
             }
-            arg.getLastSync && arg.getLastSync();
-
-            res = true;
+            
+            if (!this.msGraphClient) {
+                warn(`Database is not logged in!`);
+            } else {
+                // インポートすべきファイルがあるかどうかを確認
+                const client = this.msGraphClient;
+                if (!(this.serverFiles) || !this.serverFiles.files || this.serverFiles.files.length == 0) {
+                    info(`***** assumed as old version export files`);
+                    // インデックスファイルが指定されていない/インデックスファイルにファイル一覧がない場合は旧バージョンエクスポートファイルとみなし
+                    // ディレクトリ内のファイルをすべてインポートする（圧縮なし）
+                    const items = await FileUtil.getItems(client, importFrom, true);
+                    await Promise.all(
+                        items.map(async item =>{
+                            if (item.file && item.name && item.name != this.exportIndexName()) {
+                                const content = await FileUtil.readFile(client, item.name, importFrom);
+                                if (content) {
+                                    await importContent(item.name, false, content);
+                                }
+                            }    
+                        })
+                    )    
+                } else {
+                    info(`***** assumed as new version (compressed) export files`);
+                    // インデックスファイルのファイル一覧にデータがある場合は指定されているファイルをインポートする（圧縮：指定に従う）
+                    await Promise.all(
+                        this.serverFiles.files.map(async file => {
+                            const content = await FileUtil.readFile(client, file.file, importFrom);
+                            if (content) {
+                                await importContent(file.file, file.compressed, content);
+                            }
+                        })
+                    )
+                }
+                res = true;
+            }                
+        } catch (e) {
+            warn(`import failed: e = [${e}]`);
         }
+
+        arg.getLastSync && arg.getLastSync();
+    
         info(`▲▲▲ import END ▲▲▲`);
 
         return res;
@@ -723,7 +769,8 @@ class Database extends Dexie {
             // 旧DBインスタンスを生成
             const client = this.msGraphClient;
             const oldDb = new Database("FindMsg-database");
-            oldDb.login({client: client, userPrincipalName: this.userPrincipalName});
+            const callback = () => {info(`callback called`);};
+            oldDb.login({client: client, userPrincipalName: this.userPrincipalName, resultCallback: callback});
 
             // 旧DBをバックアップ
             await oldDb.export({includeImages: true, exportTo: `AppData/FindMsg/${this.accountDomain()}/${this.accountName()}`});
