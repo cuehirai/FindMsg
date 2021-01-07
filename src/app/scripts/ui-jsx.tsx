@@ -145,7 +145,7 @@ export const getInformation = (showInfo?: boolean): {hasInfo: boolean, info: JSX
                     res = 
                         {hasInfo: true,
                             info: (<div style={{ width: '100%', maxHeight: 100, overflow: "scroll", 
-                                    borderWidth: "medium", borderColor: "lightgray", borderStyle: "solid"}}>
+                                    borderWidth: "medium", borderColor: "#E2EFDA", borderStyle: "solid"}}>
                                     <span dangerouslySetInnerHTML = {{__html: text.toString("utf-8")}} />
                             </div>)
                         };
