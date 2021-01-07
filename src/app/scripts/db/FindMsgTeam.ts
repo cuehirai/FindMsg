@@ -6,6 +6,7 @@ import { assert } from '../utils';
 import { dateToNumber, numberToDate } from "../dateUtils";
 import { db } from './Database';
 import { FindMsgChannel } from "./FindMsgChannel";
+import * as log from '../logger';
 
 
 export class FindMsgTeam {
@@ -116,17 +117,21 @@ export class FindMsgTeam {
         }
 
         return db.transaction('rw', db.channels, db.channelMessages, async () => {
-            // save channels
-            const ids = await Promise.all(channels.map(ch => db.channels.put(FindMsgChannel.toDbEntity(ch))));
+            try {
+                // save channels
+                const ids = await Promise.all(channels.map(ch => db.channels.put(FindMsgChannel.toDbEntity(ch))));
 
-            // get ids of deleted channels
-            const deletedChannelIds = await db.channels.where('teamId').equals(teamId).and(ch => ids.indexOf(ch.id) === -1).primaryKeys();
+                // get ids of deleted channels
+                const deletedChannelIds = await db.channels.where('teamId').equals(teamId).and(ch => ids.indexOf(ch.id) === -1).primaryKeys();
 
-            // delete those channels
-            await db.channels.bulkDelete(deletedChannelIds);
+                // delete those channels
+                await db.channels.bulkDelete(deletedChannelIds);
 
-            // delete associated messages
-            await Promise.all(deletedChannelIds.map(cid => db.channelMessages.where('channelId').equals(cid).delete()));
+                // delete associated messages
+                await Promise.all(deletedChannelIds.map(cid => db.channelMessages.where('channelId').equals(cid).delete()));
+            } catch (e) {
+                log.error(`putChannels thrown an error [${e}]`);
+            }
         });
     }
 }
