@@ -458,7 +458,7 @@ class Util {
             // リストア対象フォルダ内のアイテムはすべて削除
             const items = await this.getItems(client, folderPath, true);
             await Promise.all(items.map(async(item) => {
-                if (item.id !== bkFolder.id || target.test(item.name)) {
+                if (item.id !== bkFolder.id && target.test(item.name)) {
                     item.name && await this.deleteFile(client, item.name, folderPath);
                 }
             }))
