@@ -7,6 +7,62 @@ export interface DriveItemExtended extends DriveItem {
     downloadUrl : string | null;
 }
 
+interface IFileChooser {
+    name: string;
+    isRegExp: boolean;
+}
+
+/**
+ * 対象ファイル判定クラス
+ */
+export class FileChooser {
+    private names: IFileChooser[] = [];
+    /**
+     * 対象ファイル名追加
+     * @param name ファイル名またはパターン
+     * @param isRegExp パターンを指定した場合はtrue
+     */
+    public add(name: string, isRegExp: boolean): FileChooser {
+        const item: IFileChooser = {name, isRegExp};
+        this.names.push(item);
+        return this;
+    }
+    /**
+     * 対象ファイルかどうかをテスト※対象ファイル条件に何も登録していない場合は無条件に対象と判定します
+     * @param filename テストするファイル名
+     */
+    public test(filename: string | null | undefined): boolean {
+        let res = false;
+        if (filename) {
+            if (this.names.length > 0) {
+                for (let i = 0; i < this.names.length; i++) {
+                    const item = this.names[i];
+                    if (item.isRegExp) {
+                        const reg = new RegExp(item.name);
+                        if (reg.test(filename)) {
+                            log.info(`@@@@@ filename [${filename} matches pattarn [${item.name}] @@@@@]`);
+                            res = true;
+                            break;
+                        }
+                    } else {
+                        if (item.name === filename) {
+                            log.info(`@@@@@ filename [${filename} matches name [${item.name}] @@@@@]`);
+                            res = true;
+                            break;
+                        }
+                    }
+                }
+                if (!res) {
+                    log.info(`@@@@@ filename [${filename}] does not match any pattern or name @@@@@]`);
+                }
+            } else {
+                res = true;
+            }    
+        }
+        return res;
+    }
+}
+
 const reformPathString = (path?: string | null | undefined) => {
     return path? (path.startsWith("root/"))? path.substr(5) : path : "root"
 }
@@ -36,7 +92,8 @@ class Util {
      * @param parentPath 走査したいフォルダまでのパス(パス区切り文字は「/」)※パスを省略するとroot直下を調べます。またパスを指定する際はrootは省略可能です。
      * @param createFolderIfNotExist trueを指定するとパス内に存在しないフォルダがある場合にフォルダを作成します。
      */
-    public async getItems(client: Client, parentPath?: string | null | undefined, createFolderIfNotExist?: boolean): Promise<DriveItem[]> {
+    public async getItems(client: Client, parentPath?: string | null | undefined, createFolderIfNotExist?: boolean, chooser?: FileChooser): Promise<DriveItem[]> {
+        const target = chooser?? new FileChooser;
         // 目的のフォルダをrootからのパスで指定するが、rootは省略可能
         const parent = reformPathString(parentPath);
         // log.info(`▼▼▼ getItems START parentPath: [${parent}] createIfNotExist: [${createFolderIfNotExist?? false}] ▼▼▼`);
@@ -46,7 +103,11 @@ class Util {
             log.info(`★★★ requesting api(get): [${address}] ★★★`);
             const api = await client.api(address).get();
             const fetched = await getAllPages<DriveItem>(client, api);
-            fetched.forEach(rec => {res.push(rec)});
+            fetched.forEach(rec => {
+                if (target.test(rec.name)){
+                    res.push(rec);
+                }
+            });
             // log.info(`★★★ Found [${res.length}] items in root folder ★★★`);
         } else {
             const paths = parent.split('/');
@@ -65,7 +126,11 @@ class Util {
                 // log.info(`★★★ requesting api(get): [${address}] ★★★`);
                 const api = await client.api(address).get();
                 const fetched = await getAllPages<DriveItem>(client, api);
-                fetched.forEach(rec => {res.push(rec)});
+                fetched.forEach(rec => {
+                    if (target.test(rec.name)){
+                        res.push(rec);
+                    }
+                });
                 // log.info(`★★★ Found [${res.length}] items in the folder [${folder.name}] ★★★`);
             }
         }
@@ -334,11 +399,11 @@ class Util {
      * @param folderPath バックアップしたいフォルダのパス(パス区切り文字は「/」)※パスを省略するとrootを取得します。またパスを指定する際はrootは省略可能です。
      * @param backupFolder バックアップフォルダ名※バックアップフォルダはバックアップ対象フォルダに作成します。
      */
-    public async backupFolder(client: Client, folderPath: string, backupFolder: string): Promise<boolean> {
+    public async backupFolder(client: Client, folderPath: string, backupFolder: string, chooser?: FileChooser): Promise<boolean> {
         // log.info(`▼▼▼ backupFolder START folderName: [${folderPath}] backupFolder: [${backupFolder}] ▼▼▼`);
-
         let res = true;
-        const items = await this.getItems(client, folderPath, true);
+        const target = chooser?? new FileChooser;
+        const items = await this.getItems(client, folderPath, true, target);
         // バックアップフォルダ（存在しなければ作成）の中のアイテムをすべて削除
         const bkPath = `${folderPath}/${backupFolder}`
         const oldBk = await this.getItems(client, bkPath, true)
@@ -378,18 +443,22 @@ class Util {
      * @param folderPath リストアしたいフォルダのパス(パス区切り文字は「/」)※パスを省略するとrootを取得します。またパスを指定する際はrootは省略可能です。
      * @param backupFolder バックアップフォルダ名※バックアップフォルダはリストア対象フォルダ内にあることが前提です。存在しなければ作成します。
      */
-    public async restoreFromBackup(client: Client, folderPath: string, backupFolder: string): Promise<boolean> {
+    public async restoreFromBackup(client: Client, folderPath: string, backupFolder: string, chooser?: FileChooser): Promise<boolean> {
         let res = true;
+        const target = chooser?? new FileChooser;
         // バックアップフォルダ（存在しなければ作成）にあるアイテム
         const bkPath = `${folderPath}/${backupFolder}`
         const bkFolder = await this.getFolder(client, bkPath, true);
         const oldBk = await this.getItems(client, bkPath, true)
+        oldBk.forEach(rec => {
+            rec.name && target.add(rec.name, false);
+        })
 
         if (bkFolder) {
             // リストア対象フォルダ内のアイテムはすべて削除
             const items = await this.getItems(client, folderPath, true);
             await Promise.all(items.map(async(item) => {
-                if (item.id !== bkFolder.id) {
+                if (item.id !== bkFolder.id || target.test(item.name)) {
                     item.name && await this.deleteFile(client, item.name, folderPath);
                 }
             }))

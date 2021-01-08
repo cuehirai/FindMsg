@@ -22,6 +22,7 @@ interface IFindMsgIndexState extends IMyOwnState {
 
 
 export class FindMsgIndex extends TeamsBaseComponentWithAuth {
+    protected exportTargetTables = undefined;
     protected exportOptionAvailable = true;
     protected isFixedPageSize = false;
     protected showInformation = false;

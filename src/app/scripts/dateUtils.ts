@@ -16,6 +16,7 @@ export { default as startOfToday } from "date-fns/startOfToday";
 export { default as subDays } from "date-fns/subDays";
 export { default as subHours } from "date-fns/subHours";
 export { default as subMinutes } from "date-fns/subMinutes";
+export { default as subSeconds } from "date-fns/subSeconds";
 export { default as subMonths } from "date-fns/subMonths";
 export { default as subWeeks } from "date-fns/subWeeks";
 export { default as subYears } from "date-fns/subYears";

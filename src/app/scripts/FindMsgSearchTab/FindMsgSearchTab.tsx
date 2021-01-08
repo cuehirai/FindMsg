@@ -23,6 +23,7 @@ import { getTopLevelMessagesLastSynced } from "../db/Sync";
 import { ICommonMessage } from "../i18n/ICommonMessage";
 import { DatabaseLogin, ExportImportComponents, getChannelMap, getInformation, IChannelInfo, IExportImportArgs, IExportImportState } from "../ui-jsx";
 import { db } from "../db/Database";
+import { currentLoginHintKey } from "../msteams-react-base-component-with-auth";
 
 
 export declare type MyTeam = IFindMsgTeam & { channels: IFindMsgChannel[] };
@@ -367,6 +368,7 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
             groupId = teamOptions[teamIdx].key;
             channelId = channelOptions[teamIdx][channelIdx].key;
         }
+        sessionStorage.setItem(currentLoginHintKey, loginHint);
 
         this.setState({
             teamsInfo: {
@@ -487,11 +489,12 @@ export class FindMsgSearchTab extends TeamsBaseComponent<never, IFindMsgSearchTa
         const exportImportCompArg: IExportImportArgs = {
             lastSyncedKey: lastSyncedKey,
             exportCallback: async (newState: IExportImportState) => {this.setState({exportImportState: newState});},
-            importCallback: async (newState: IExportImportState, lastSynced: Date) => {this.setState({lastSynced: lastSynced, exportImportState: newState})},
+            importCallback: async (newState: IExportImportState, lastSynced: Date) => {this.setState({lastSynced: lastSynced, exportImportState: newState}, this.initInfo)},
             otherCallback: (newState: IExportImportState) => {this.setState({exportImportState: newState});},
             state: {...this.state.exportImportState},
             translate: this.state.t,
             exportOptionAvailable: true,
+            exportTargetTables: [db.teams, db.channels, db.channelMessages, db.images, db.users, db.lastsync],
         }
 
         // const dbCopy: ComponentEventHandler<ButtonProps> = async() => {

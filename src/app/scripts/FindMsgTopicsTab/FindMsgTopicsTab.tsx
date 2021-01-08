@@ -19,6 +19,7 @@ import { AI } from '../appInsights';
 import { getTopLevelMessagesLastSynced, topLevelMessagesSyncKey } from "../db/Sync";
 import { DatabaseLogin, ExportImportComponents, getChannelMap, getInformation, IChannelInfo, IExportImportArgs, IExportImportState } from "../ui-jsx";
 import { db } from "../db/Database";
+import { currentLoginHintKey } from "../msteams-react-base-component-with-auth";
 
 
 declare type DropdownItemPropsKey = DropdownItemProps & { key: string };
@@ -288,6 +289,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             groupId = teamOptions[teamIdx].key;
             channelId = channelOptions[teamIdx][channelIdx].key;
         }
+        sessionStorage.setItem(currentLoginHintKey, loginHint);
 
         this.setState({
             teamsInfo: {
@@ -402,6 +404,7 @@ export class FindMsgTopicsTab extends TeamsBaseComponent<never, IFindMsgTopicsTa
             state: {...this.state.exportImportState},
             translate: this.state.t,
             exportOptionAvailable: true,
+            exportTargetTables: [db.teams, db.channels, db.channelMessages, db.images, db.users, db.lastsync],
         }
 
         return (
