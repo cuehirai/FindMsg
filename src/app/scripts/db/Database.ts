@@ -21,7 +21,7 @@ import IDBExportImport from 'indexeddb-export-import';
 import { Client } from '@microsoft/microsoft-graph-client';
 import { AppConfig } from '../../../config/AppConfig';
 import * as du from "../dateUtils";
-import { FileUtil } from '../fileUtil';
+import { FileChooser, FileUtil } from '../fileUtil';
 import sizeof from 'object-sizeof';
 import { ImageTable } from './Image/ImageEntity';
 import { b64toBlob } from '../utils';
@@ -335,24 +335,8 @@ class Database extends Dexie {
     async login(arg: {client: Client, userPrincipalName: string, resultCallback: (result: DbLoginResult) => void}): Promise<DbLoginResult> {
         info(`▼▼▼ Database.login START ▼▼▼`);
 
-        const getFileIndex = async (): Promise<IExportIndexFile | null> => {
-            let res: IExportIndexFile | null = null;
-            const indexFile = await FileUtil.readFile(arg.client, this.exportIndexName(), this.exportfilePath());
-            if (indexFile) {
-                const json: IExportIndexFile = JSON.parse(indexFile);
-                info(`***** index file found. JSON.parse result: [${JSON.stringify(json)}]`);
-                res = {
-                    exported: json.exported,
-                    files: json.files,
-                }
-            } else {
-                info(`***** index file not found.`);
-            }
-            return res;
-        };
-
         const userChanged = async (): Promise<void> => {
-            const index = await getFileIndex();
+            const index = await this.getFileIndex();
             if (index) {
                 this.serverFiles = index;
                 arg.resultCallback("SHOULD_IMPORT");
@@ -366,7 +350,7 @@ class Database extends Dexie {
             // 同じユーザが使い続けている場合、現在のデバイス/ブラウザで最後にエクスポートまたはインポートした日付よりも
             // エクスポートファイルの最終更新日時が新しければリロードを勧める
             // ※他のデバイス/ブラウザで同期・エクスポートした内容を取り込む想定
-            const index = await getFileIndex();
+            const index = await this.getFileIndex();
             if (index) {
                 this.serverFiles = index;
 
@@ -422,6 +406,30 @@ class Database extends Dexie {
         }    
         info(`▲▲▲ Database.login END ▲▲▲`);
         return "OK";
+    }
+
+    /**
+     * エクスポートインデクスファイルを読み込みます
+     * @param client Graphクライアント
+     */
+    async getFileIndex(): Promise<IExportIndexFile | null> {
+        let res: IExportIndexFile | null = null;
+        if (this.msGraphClient) {
+            const indexFile = await FileUtil.readFile(this.msGraphClient, this.exportIndexName(), this.exportfilePath());
+            if (indexFile) {
+                const json: IExportIndexFile = JSON.parse(indexFile);
+                info(`***** index file found. JSON.parse result: [${JSON.stringify(json)}]`);
+                res = {
+                    exported: json.exported,
+                    files: json.files,
+                }
+            } else {
+                info(`***** index file not found.`);
+            }    
+        } else {
+            warn(`Database not logged in => cannot read index file`);
+        }
+        return res;
     }
 
     /**
@@ -481,7 +489,7 @@ class Database extends Dexie {
      * @param exportTo 既定のエクスポートパスと異なる場所に保存したい場合に指定するパス文字列です
      * @param callback 全テーブルのエクスポートが完了した時点で呼び出されるコールバックです
      */
-    async export(arg: {syncDatetime?: Date, exportTo?: string, includeImages: boolean, progressCallback?: (tableName: string, done: number, all: number, progress: number) => void, callback?: (message: number) => void}): Promise<boolean> {
+    async export(arg: {syncDatetime?: Date, exportTo?: string, includeImages: boolean, targetTables?: Dexie.Table[], progressCallback?: (tableName: string, done: number, all: number, progress: number) => void, callback?: (message: number) => void}): Promise<boolean> {
         info(`▼▼▼ export START ▼▼▼`);
         let res = false;
         let message = 0;
@@ -491,6 +499,27 @@ class Database extends Dexie {
         } else {
             const client = this.msGraphClient;
             const maxMem = 15728640;
+            const target = new FileChooser;
+            // テーブルの選択用にもFileChooserを流用
+            const tableChooser = new FileChooser;
+            // 対象テーブルが指定されている場合はファイル条件を追加しておく(条件=0件の場合はすべてのテーブル/ファイルが対象となる)
+            if (arg.targetTables && arg.targetTables.length > 0) {
+                target.add(this.exportIndexName(), false);
+                arg.targetTables.forEach(table => {
+                    if (arg.includeImages || table.name !== this.images.name) {
+                        const name = `^db\\.${table.name}-\\d*\\.dat`;
+                        target.add(name, true);
+                        tableChooser.add(table.name, false);
+                        info(`@@@@@ target file added: pattern [${name}] @@@@@`);
+                    }
+                })
+            } else {
+                this.tables.forEach(table => {
+                    if (arg.includeImages || table.name !== this.images.name) {
+                        tableChooser.add(table.name, false);
+                    }
+                })
+            }
 
             // OneDriveに必要な容量が残っているかをチェック
             let required = 0;
@@ -501,15 +530,25 @@ class Database extends Dexie {
 
                 const exportPath = arg.exportTo?? this.exportfilePath();
                 const files: IFile[] = [];
+                // 最新のインデックスファイルを読み込む
+                const index = await this.getFileIndex();
+                if (index && index.files) {
+                    // 対象テーブルのファイルでないものは予めファイルリストに追加しておく
+                    index.files.forEach(file => {
+                        if (!target.test(file.file)) {
+                            files.push({file: file.file, compressed: file.compressed});
+                        }
+                    })
+                }
 
                 // 既存のエクスポートファイルをバックアップ
-                const bkup = await FileUtil.backupFolder(client, exportPath, "bkup")
+                const bkup = await FileUtil.backupFolder(client, exportPath, "bkup", target)
     
                 // Export処理本体    
                 let allCount = 0
                 await Promise.all(
                     this.tables.map(async table => {
-                        if (arg.includeImages || table.name !== this.images.name) {
+                        if (tableChooser.test(table.name)) {
                             const recs = await table.count();
                             info(`@@@@@ table [${table.name}].count() = [${recs}] @@@@@`)
                             allCount += recs;
@@ -528,7 +567,7 @@ class Database extends Dexie {
                 const exportTables = async(client: Client): Promise<boolean> => {
                     let res = true;
                     await Promise.all(this.tables.map(async (table) => {
-                        if (arg.includeImages || table.name !== this.images.name) {
+                        if (tableChooser.test(table.name)) {
                             if ( !(await exportToFiles(client, table)) ) {
                                 res = false;
                                 warn(`exportToFiles failed`);
@@ -545,6 +584,8 @@ class Database extends Dexie {
     
                     let arr: Array<any> = [];
                     let fileNo = 0;
+                    let prevPercent = 0;
+                    let prevTimestamp = du.now();
     
                     await table.each(async (rec) => {
                         arr.push(rec);
@@ -567,12 +608,18 @@ class Database extends Dexie {
                             mem = sizeof(arr);
                             info(`@@@@@ memory size of output record array after clear: ${mem} @@@@@`);
                             if (await FileUtil.writeFile(client, fileName, jsonString, exportPath, true)) {
-                                arg.progressCallback && arg.progressCallback(table.name, doneCount, allCount, progPercent());
                                 info(`@@@@@ file [${fileName}] written into OneDrive @@@@@`);
                             } else {
                                 res = false;
                                 warn(`@@@@@ write file [${fileName}] into OnDrive failed @@@@@`)
                             }
+                        }
+                        const timestamp = du.subSeconds(du.now(), 10);
+                        const percent = progPercent();
+                        if (percent >= prevPercent + 5 || timestamp > prevTimestamp || percent === 100) {
+                            arg.progressCallback && arg.progressCallback(table.name, doneCount, allCount, percent);
+                            prevPercent = percent;
+                            prevTimestamp = du.now();
                         }
                     })
                     if (arr.length > 0) {
@@ -613,7 +660,7 @@ class Database extends Dexie {
                         } else {
                             // バックアップが成功していたならリストア（ロールバックに近い）
                             if (bkup) {
-                                await FileUtil.restoreFromBackup(client, exportPath, "bkup");
+                                await FileUtil.restoreFromBackup(client, exportPath, "bkup", target);
                             }
                             // 計算上容量が足りていなかった場合はメッセージ出力
                             if (remain < required) {

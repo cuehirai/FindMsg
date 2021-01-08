@@ -11,6 +11,7 @@ import { ISyncFunctionArg, OrderByDirection } from "../db/db-accessor-class-base
 import { IFindMsgEvent } from "../db/Event/IFindMsgEvent";
 import { AppConfig } from "../../../config/AppConfig";
 import * as du from "../dateUtils";
+import { db } from "../db/Database";
 
 /** スケジュール検索用ロケール依存リソース定義 */
 export interface IFindMsgScheduleTranslation {
@@ -58,7 +59,8 @@ interface ISavedState {
  * スケジュール検索コンポーネント
  */
 export class FindMsgSearchSchedule extends TeamsBaseComponentWithAuth {
-    protected exportOptionAvailable = true;
+    protected exportTargetTables = [db.events, db.attendees, db.lastsync];
+    protected exportOptionAvailable = false;
     protected isFixedPageSize = false;
     protected showInformation = true;
     protected async setAdditionalState(newstate: ITeamsAuthComponentState, context?: microsoftTeams.Context, inTeams?: boolean): Promise<void> {

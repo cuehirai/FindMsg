@@ -51,14 +51,14 @@ export interface ICommonMessage {
     confirmExport: string;
     /** (画像エクスポートを省略すると時間が短縮されます。) */
     confirmExportOption: string;
-    /** {0}をエクスポート中... ( {1} / {2} ) {3}% 完了 */
-    exportProgress: (tableName: string, done: number, all: number, progress: number) => string;
+    /** エクスポート中... ( {0} / {1} ) {2}% 完了 */
+    exportProgress: (done: number, all: number, progress: number) => string;
     /** データベースにデータをインポートしますか？ */
     confirmImportForNewUser: string;
     /** One Driveに現在のデータよりも新しいファイルがエクスポートされています。インポートしますか？ */
     confirmImportNewerData: string;
-    /** {0}をインポート中... ( {1} / {2} ) {3}% 完了 */
-    importProgress: (tableName: string, done: number, all: number, progress: number) => string;
+    /** インポート中... ( {0} / {1} ) {2}% 完了 */
+    importProgress: (done: number, all: number, progress: number) => string;
     /** アプリの終了やタブの移動をしないでください。 */
     exportImportMessage: string;
     /** 処理を待機しています... */

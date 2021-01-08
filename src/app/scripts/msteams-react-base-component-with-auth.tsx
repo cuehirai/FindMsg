@@ -17,7 +17,7 @@ import { FindMsgChannel, FindMsgTeam, FindMsgUserCache } from "./db";
 import { ICommonMessage } from "./i18n/ICommonMessage";
 import { StoragePermissionIndicator } from "./StoragePermissionIndicator";
 import { StoragePermissionWidget } from "./StoragePermissionWidget";
-import { User } from "@microsoft/microsoft-graph-types";
+// import { User } from "@microsoft/microsoft-graph-types";
 import { DatabaseLogin, ExportImportComponents, getInformation, IExportImportArgs, IExportImportState } from "./ui-jsx";
 
 /** ログインユーザのuserPrincipalNameをlocalStorageに保存するキー */
@@ -221,6 +221,10 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
     }
 
     /**
+     * このページからエクスポート指示する際の対象テーブルを指定してください。※指定なしの場合は全テーブルを対象とします。
+     */
+    protected abstract exportTargetTables: Dexie.Table[] | undefined;
+    /**
      * このページでのエクスポート確認ダイアログにオプションを表示するかどうかを宣言してください。
      */
     protected abstract exportOptionAvailable: boolean;
@@ -401,6 +405,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             state: {...this.state.exportImportState},
             translate: this.state.translation,
             exportOptionAvailable: this.exportOptionAvailable,
+            exportTargetTables: this.exportTargetTables,
         }
 
         const contentBase = (
@@ -484,7 +489,7 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
     protected initBaseInfo = async (context?: microsoftTeams.Context, inTeams?: boolean): Promise<void> => {
         log.info(`▼▼▼ initBaseInfo START ▼▼▼`);
         const hostedInTeams = inTeams?? this.state.hostedInTeams;
-        let loginHint = context?.loginHint ?? this.state.teamsInfo.loginHint;
+        const loginHint = context?.loginHint ?? this.state.teamsInfo.loginHint;
         let groupId = context?.groupId ?? this.state.teamsInfo.groupId;
         let channelId = context?.channelId ?? this.state.teamsInfo.channelId;
         const entityId = context?.entityId ?? "";
@@ -580,21 +585,8 @@ export abstract class TeamsBaseComponentWithAuth extends TeamsBaseComponent<neve
             channelId = channelOptions[teamIdx][channelIdx].key;
         }
 
-        const loginRequired = !haveUserInfo(loginHint);
-        if (!loginRequired && !hostedInTeams) {
-            try {
-                log.info(`★★★ Try get 'me' from graph ★★★`)
-                const me: User = await this.msGraphClient.api('/me').get();
-                const res = me.userPrincipalName ?? "";
-                if (!(res === "")) {
-                    loginHint = res;
-                    sessionStorage.setItem(currentLoginHintKey, loginHint);
-                    log.info(`★★★ Successfully saved [${loginHint}] to sessionStorage ★★★`)
-                }
-                log.info(`★★★ End get 'me' from graph ★★★`)
-            } catch (error) {
-                log.error(error);
-            }
+        if (loginHint !== "") {
+            sessionStorage.setItem(currentLoginHintKey, loginHint);
         }
 
         const newstate: ITeamsAuthComponentState = {

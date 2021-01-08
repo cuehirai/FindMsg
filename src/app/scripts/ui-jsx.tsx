@@ -187,6 +187,8 @@ export interface IExportImportArgs {
     translate: IMessageTranslation;
     /** エクスポート時に「画像をエクスポートするかどうか」を選択できるようにするにはtrueを設定してください */
     exportOptionAvailable: boolean;
+    /** エクスポート対象テーブル※省略すると全テーブルをエクスポート対象とします */
+    exportTargetTables?: Dexie.Table[];
 }
 
 /** エクスポート・インポートの確認ダイアログ、進捗状況マスクの制御用ステータス */
@@ -301,7 +303,7 @@ export const ExportImportComponents = (args: IExportImportArgs): JSX.Element => 
     const handleExportDialogOk = () => {
         args.state.exportDialog = false;
         args.state.exporting = true;
-        db.export({includeImages: args.state.exportImages, progressCallback: progressCallback, callback: exportCallback })
+        db.export({includeImages: args.state.exportImages, progressCallback: progressCallback, callback: exportCallback, targetTables: args.exportTargetTables })
         const newState = cloneState();
         args.otherCallback(newState);
     }
@@ -352,9 +354,9 @@ export const ExportImportComponents = (args: IExportImportArgs): JSX.Element => 
             res = args.translate.common.standingBy;
         } else {
             if (exporting) {
-                res = args.translate.common.exportProgress(processingTable, doneCount, allCount, currentProgress);
+                res = args.translate.common.exportProgress(doneCount, allCount, currentProgress);
             } else if (importing) {
-                res = args.translate.common.importProgress(processingTable, doneCount, allCount, currentProgress);
+                res = args.translate.common.importProgress(doneCount, allCount, currentProgress);
             }    
         }
         return res;

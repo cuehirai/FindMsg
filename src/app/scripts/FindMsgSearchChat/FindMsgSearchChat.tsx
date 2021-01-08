@@ -23,6 +23,7 @@ import { db, idx } from "../db/Database";
 import Dexie from "dexie";
 import { ICommonMessage } from "../i18n/ICommonMessage";
 import { DatabaseLogin, ExportImportComponents, getInformation, IExportImportArgs, IExportImportState } from "../ui-jsx";
+import { currentLoginHintKey } from "../msteams-react-base-component-with-auth";
 
 
 declare type SearchUserItem = DropdownItemProps & { key: string };
@@ -213,6 +214,8 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                 websiteUrl: location.href,
             });
 
+            sessionStorage.setItem(currentLoginHintKey, context.loginHint ?? "");
+
             const newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: context.loginHint?? "", state: this.state.exportImportState, callback: callback});
     
             t = strings.get(context.locale);
@@ -229,6 +232,7 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
                     exportImportState: newExportImportState,
                 });
         } else {
+            sessionStorage.setItem(currentLoginHintKey, this.state.teamsInfo.loginHint);
 
             const newExportImportState = await DatabaseLogin({client: this.msGraphClient, userPrincipalName: this.state.teamsInfo.loginHint, state: this.state.exportImportState, callback: callback});
     
@@ -307,11 +311,12 @@ export class FindMsgSearchChat extends ChatsBaseComponent<never, IFindMsgSearchC
         const exportImportCompArg: IExportImportArgs = {
             lastSyncedKey: lastSyncedKey,
             exportCallback: async (newState: IExportImportState) => {this.setState({exportImportState: newState});},
-            importCallback: async (newState: IExportImportState, lastSynced: Date) => {this.setState({lastSynced: lastSynced, exportImportState: newState})},
+            importCallback: async (newState: IExportImportState, lastSynced: Date) => {this.setState({lastSynced: lastSynced, exportImportState: newState}, this.getDataFromDb)},
             otherCallback: (newState: IExportImportState) => {this.setState({exportImportState: newState});},
             state: {...this.state.exportImportState},
             translate: this.state.t,
             exportOptionAvailable: true,
+            exportTargetTables: [db.chats, db.chatMembers, db.chatMessages, db.images, db.users, db.lastsync],
         }
 
         return (
